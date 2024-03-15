@@ -105,7 +105,7 @@ class DIDMethods:
         self._registry: Dict[str, DIDMethod] = {
             SOV.method_name: SOV,
             KEY.method_name: KEY,
-            INDY2.method_name: INDY2
+            INDY2.method_name: INDY2,
             WEB.method_name: WEB,
             PEER2.method_name: PEER2,
         }

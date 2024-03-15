@@ -2,7 +2,6 @@
 
 import abc
 import json
-
 from functools import reduce
 from itertools import chain
 from os import environ
@@ -10,15 +9,12 @@ from typing import Type
 
 import deepmerge
 import yaml
-
 from configargparse import ArgumentParser, Namespace, YAMLConfigFileParser
 
 from ..utils.tracing import trace_event
-
 from .error import ArgsParseError
-from .util import BoundedInt, ByteSize
-
 from .plugin_settings import PLUGIN_CONFIG_KEY
+from .util import BoundedInt, ByteSize
 
 CAT_PROVISION = "general"
 CAT_START = "start"
@@ -787,13 +783,13 @@ class RevocationGroup(ArgumentGroup):
         if args.notify_revocation:
             settings["revocation.notify"] = args.notify_revocation
         if args.monitor_revocation_notification:
-            settings[
-                "revocation.monitor_notification"
-            ] = args.monitor_revocation_notification
+            settings["revocation.monitor_notification"] = (
+                args.monitor_revocation_notification
+            )
         if args.anoncreds_legacy_revocation:
-            settings[
-                "revocation.anoncreds_legacy_support"
-            ] = args.anoncreds_legacy_revocation
+            settings["revocation.anoncreds_legacy_support"] = (
+                args.anoncreds_legacy_revocation
+            )
         return settings
 
 
@@ -1227,6 +1223,19 @@ class ProtocolGroup(ArgumentGroup):
                 "using unencrypted rather than encrypted tags"
             ),
         )
+        parser.add_argument(
+            "--emit-did-peer-2",
+            action="store_true",
+            env_var="ACAPY_EMIT_DID_PEER_2",
+            help=("Emit did:peer:2 DIDs in DID Exchange Protocol"),
+        )
+
+        parser.add_argument(
+            "--emit-did-peer-4",
+            action="store_true",
+            env_var="ACAPY_EMIT_DID_PEER_4",
+            help=("Emit did:peer:4 DIDs in DID Exchange Protocol"),
+        )
 
     def get_settings(self, args: Namespace) -> dict:
         """Get protocol settings."""
@@ -1293,6 +1302,12 @@ class ProtocolGroup(ArgumentGroup):
         if args.exch_use_unencrypted_tags:
             settings["exch_use_unencrypted_tags"] = True
             environ["EXCH_UNENCRYPTED_TAGS"] = "True"
+
+        if args.emit_did_peer_2:
+            settings["emit_did_peer_2"] = True
+        if args.emit_did_peer_4:
+            settings["emit_did_peer_4"] = True
+
         return settings
 
 
@@ -1742,13 +1757,13 @@ class WalletGroup(ArgumentGroup):
             settings["wallet.replace_public_did"] = True
         if args.recreate_wallet:
             settings["wallet.recreate"] = True
-        # check required settings for 'indy' wallets
+        # check required settings for persistent wallets
         if settings["wallet.type"] in ["indy", "askar", "askar-anoncreds"]:
             # requires name, key
             if not args.wallet_name or not args.wallet_key:
                 raise ArgsParseError(
                     "Parameters --wallet-name and --wallet-key must be provided "
-                    "for indy wallets"
+                    "for persistent wallets"
                 )
             # postgres storage requires additional configuration
             if (
@@ -1860,9 +1875,9 @@ class MultitenantGroup(ArgumentGroup):
                         )
 
                     if multitenancy_config.get("key_derivation_method"):
-                        settings[
-                            "multitenant.key_derivation_method"
-                        ] = multitenancy_config.get("key_derivation_method")
+                        settings["multitenant.key_derivation_method"] = (
+                            multitenancy_config.get("key_derivation_method")
+                        )
 
                 else:
                     for value_str in args.multitenancy_config:
@@ -2010,9 +2025,9 @@ class EndorsementGroup(ArgumentGroup):
 
         if args.endorser_endorse_with_did:
             if settings["endorser.endorser"]:
-                settings[
-                    "endorser.endorser_endorse_with_did"
-                ] = args.endorser_endorse_with_did
+                settings["endorser.endorser_endorse_with_did"] = (
+                    args.endorser_endorse_with_did
+                )
             else:
                 raise ArgsParseError(
                     "Parameter --endorser-endorse-with-did should only be set for "

@@ -1,7 +1,8 @@
 """Manager for performing Linked Data Proof signatures over JSON-LD formatted W3C VCs."""
 
-
-from typing import Dict, Optional, Type
+from typing import Dict, List, Optional, Type, Union, cast
+from pyld import jsonld
+from pyld.jsonld import JsonLdProcessor
 
 from ...core.profile import Profile
 from ...wallet.base import BaseWallet
@@ -9,6 +10,8 @@ from ...wallet.default_verification_key_strategy import BaseVerificationKeyStrat
 from ...wallet.did_info import DIDInfo
 from ...wallet.error import WalletNotFoundError
 from ...wallet.key_type import BLS12381G2, ED25519, KeyType
+from ...storage.vc_holder.base import VCHolder
+from ...storage.vc_holder.vc_record import VCRecord
 from ..ld_proofs.constants import (
     SECURITY_CONTEXT_BBS_URL,
     SECURITY_CONTEXT_ED25519_2020_URL,
@@ -27,36 +30,43 @@ from ..ld_proofs.validation_result import DocumentVerificationResult
 from ..vc_ld.models.presentation import VerifiablePresentation
 from ..vc_ld.validation_result import PresentationVerificationResult
 from .issue import issue as ldp_issue
+from .prove import sign_presentation
 from .models.credential import VerifiableCredential
 from .models.linked_data_proof import LDProof
 from .models.options import LDProofVCOptions
 from .verify import verify_credential, verify_presentation
 
-
+SignatureTypes = Union[
+    Type[Ed25519Signature2018],
+    Type[Ed25519Signature2020],
+    Type[BbsBlsSignature2020],
+]
+ProofTypes = Union[
+    Type[Ed25519Signature2018],
+    Type[Ed25519Signature2020],
+    Type[BbsBlsSignature2020],
+    Type[BbsBlsSignatureProof2020],
+]
 SUPPORTED_ISSUANCE_PROOF_PURPOSES = {
     CredentialIssuancePurpose.term,
     AuthenticationProofPurpose.term,
 }
-SUPPORTED_ISSUANCE_SUITES = {Ed25519Signature2018, Ed25519Signature2020}
-SIGNATURE_SUITE_KEY_TYPE_MAPPING: Dict[Type[LinkedDataProof], KeyType] = {
+SIGNATURE_SUITE_KEY_TYPE_MAPPING: Dict[SignatureTypes, KeyType] = {
     Ed25519Signature2018: ED25519,
     Ed25519Signature2020: ED25519,
 }
+PROOF_KEY_TYPE_MAPPING = cast(
+    Dict[ProofTypes, KeyType], SIGNATURE_SUITE_KEY_TYPE_MAPPING
+)
 
 
 # We only want to add bbs suites to supported if the module is installed
 if BbsBlsSignature2020.BBS_SUPPORTED:
-    SUPPORTED_ISSUANCE_SUITES.add(BbsBlsSignature2020)
-    SUPPORTED_ISSUANCE_SUITES.add(BbsBlsSignatureProof2020)
-    SIGNATURE_SUITE_KEY_TYPE_MAPPING.update(
-        {
-            BbsBlsSignature2020: BLS12381G2,
-            BbsBlsSignatureProof2020: BLS12381G2,
-        }
-    )
+    SIGNATURE_SUITE_KEY_TYPE_MAPPING[BbsBlsSignature2020] = BLS12381G2
+    PROOF_KEY_TYPE_MAPPING[BbsBlsSignatureProof2020] = BLS12381G2
 
 
-PROOF_TYPE_SIGNATURE_SUITE_MAPPING = {
+PROOF_TYPE_SIGNATURE_SUITE_MAPPING: Dict[str, SignatureTypes] = {
     suite.signature_type: suite for suite in SIGNATURE_SUITE_KEY_TYPE_MAPPING
 }
 
@@ -266,10 +276,37 @@ class VcLdpManager:
 
         return credential
 
-    async def _get_suite_for_credential(
-        self, credential: VerifiableCredential, options: LDProofVCOptions
+    async def prepare_presentation(
+        self,
+        presentation: VerifiablePresentation,
+        options: LDProofVCOptions,
+    ) -> VerifiableCredential:
+        """Prepare a presentation for issuance."""
+        # Add BBS context if not present yet
+        if (
+            options.proof_type == BbsBlsSignature2020.signature_type
+            and SECURITY_CONTEXT_BBS_URL not in presentation.context_urls
+        ):
+            presentation.add_context(SECURITY_CONTEXT_BBS_URL)
+        # Add ED25519-2020 context if not present yet
+        elif (
+            options.proof_type == Ed25519Signature2020.signature_type
+            and SECURITY_CONTEXT_ED25519_2020_URL not in presentation.context_urls
+        ):
+            presentation.add_context(SECURITY_CONTEXT_ED25519_2020_URL)
+
+        return presentation
+
+    async def _get_suite_for_document(
+        self,
+        document: Union[VerifiableCredential, VerifiablePresentation],
+        options: LDProofVCOptions,
     ) -> LinkedDataProof:
-        issuer_id = credential.issuer_id
+        if isinstance(document, VerifiableCredential):
+            issuer_id = document.issuer_id
+        elif isinstance(document, VerifiablePresentation):
+            issuer_id = document.holder_id
+
         proof_type = options.proof_type
 
         if not issuer_id:
@@ -311,16 +348,24 @@ class VcLdpManager:
 
         return suite
 
-    async def _get_all_suites(self):
-        """Get all supported suites for verifying presentation."""
-        suites = []
-        for suite, key_type in SIGNATURE_SUITE_KEY_TYPE_MAPPING.items():
-            suites.append(
-                suite(
+    async def _get_all_proof_suites(self) -> List[LinkedDataProof]:
+        """Get all supported suites for verifying presentation.
+
+        Returns a list of suites instantiated with a key type, derived from
+        PROOF_KEY_TYPE_MAPPING entries.
+        """
+        return [
+            # Satisfy type checks with a cast to LinkedDataProof
+            cast(
+                LinkedDataProof,
+                # Instantiate suite with a key type
+                SuiteClass(
                     key_pair=WalletKeyPair(profile=self.profile, key_type=key_type),
-                )
+                ),
             )
-        return suites
+            # for each suite class -> key_type pair from PROOF_KEY_TYPE_MAPPING
+            for SuiteClass, key_type in PROOF_KEY_TYPE_MAPPING.items()
+        ]
 
     async def issue(
         self, credential: VerifiableCredential, options: LDProofVCOptions
@@ -329,7 +374,7 @@ class VcLdpManager:
         credential = await self.prepare_credential(credential, options)
 
         # Get signature suite, proof purpose and document loader
-        suite = await self._get_suite_for_credential(credential, options)
+        suite = await self._get_suite_for_document(credential, options)
         proof_purpose = self._get_proof_purpose(
             proof_purpose=options.proof_purpose,
             challenge=options.challenge,
@@ -345,19 +390,37 @@ class VcLdpManager:
         )
         return VerifiableCredential.deserialize(vc)
 
-    async def verify_presentation(
-        self, vp: VerifiablePresentation, options: LDProofVCOptions
-    ) -> PresentationVerificationResult:
-        """Verify a VP with a Linked Data Proof."""
-        if not options.challenge:
-            raise VcLdpManagerError("Challenge is required for verifying a VP")
+    async def store_credential(
+        self, vc: VerifiableCredential, options: LDProofVCOptions, cred_id: str = None
+    ) -> VerifiableCredential:
+        """Store a verifiable credential."""
 
-        return await verify_presentation(
-            presentation=vp.serialize(),
-            suites=await self._get_all_suites(),
-            document_loader=self.profile.inject(DocumentLoader),
-            challenge=options.challenge,
+        # Saving expanded type as a cred_tag
+        document_loader = self.profile.inject(DocumentLoader)
+        expanded = jsonld.expand(
+            vc.serialize(), options={"documentLoader": document_loader}
         )
+        types = JsonLdProcessor.get_values(
+            expanded[0],
+            "@type",
+        )
+        vc_record = VCRecord(
+            contexts=vc.context_urls,
+            expanded_types=types,
+            issuer_id=vc.issuer_id,
+            subject_ids=vc.credential_subject_ids,
+            schema_ids=[],  # Schemas not supported yet
+            proof_types=[vc.proof.type],
+            cred_value=vc.serialize(),
+            given_id=vc.id,
+            record_id=cred_id,
+            cred_tags=None,  # Tags should be derived from credential values
+        )
+
+        async with self.profile.session() as session:
+            vc_holder = session.inject(VCHolder)
+
+            await vc_holder.store_credential(vc_record)
 
     async def verify_credential(
         self, vc: VerifiableCredential
@@ -365,6 +428,44 @@ class VcLdpManager:
         """Verify a VC with a Linked Data Proof."""
         return await verify_credential(
             credential=vc.serialize(),
-            suites=await self._get_all_suites(),
+            suites=await self._get_all_proof_suites(),
             document_loader=self.profile.inject(DocumentLoader),
+        )
+
+    async def prove(
+        self, presentation: VerifiablePresentation, options: LDProofVCOptions
+    ) -> VerifiablePresentation:
+        """Sign a VP with a Linked Data Proof."""
+        presentation = await self.prepare_presentation(presentation, options)
+
+        # Get signature suite, proof purpose and document loader
+        suite = await self._get_suite_for_document(presentation, options)
+        proof_purpose = self._get_proof_purpose(
+            proof_purpose=options.proof_purpose,
+            challenge=options.challenge,
+            domain=options.domain,
+        )
+        document_loader = self.profile.inject(DocumentLoader)
+
+        vp = await sign_presentation(
+            presentation=presentation.serialize(),
+            suite=suite,
+            document_loader=document_loader,
+            purpose=proof_purpose,
+        )
+        return VerifiablePresentation.deserialize(vp)
+
+    async def verify_presentation(
+        self, vp: VerifiablePresentation, options: LDProofVCOptions
+    ) -> PresentationVerificationResult:
+        """Verify a VP with a Linked Data Proof."""
+
+        if not options.challenge:
+            raise VcLdpManagerError("Challenge is required for verifying a VP")
+
+        return await verify_presentation(
+            presentation=vp.serialize(),
+            suites=await self._get_all_proof_suites(),
+            document_loader=self.profile.inject(DocumentLoader),
+            challenge=options.challenge,
         )

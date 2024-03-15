@@ -4,7 +4,6 @@ import uuid
 
 from runners.agent_container import AgentContainer, create_agent_with_args_list
 
-
 ######################################################################
 # coroutine utilities
 ######################################################################
@@ -29,8 +28,8 @@ def async_sleep(delay):
 ######################################################################
 # high level aries agent interface
 ######################################################################
-def create_agent_container_with_args(in_args: list):
-    return run_coroutine(create_agent_with_args_list, in_args)
+def create_agent_container_with_args(in_args: list, extra_args: list = None):
+    return run_coroutine(create_agent_with_args_list, in_args, extra_args)
 
 
 def aries_container_initialize(
@@ -246,6 +245,7 @@ def agent_container_POST(
     data: dict = None,
     text: bool = False,
     params: dict = None,
+    raise_error: bool = True,
 ) -> dict:
     return run_coroutine(
         the_container.admin_POST,
@@ -253,6 +253,7 @@ def agent_container_POST(
         data=data,
         text=text,
         params=params,
+        raise_error=raise_error,
     )
 
 

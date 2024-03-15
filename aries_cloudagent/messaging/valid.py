@@ -777,10 +777,26 @@ class CredentialType(Validator):
         length = len(value)
         if length < 1 or CredentialType.CREDENTIAL_TYPE not in value:
             raise ValidationError(f"type must include {CredentialType.CREDENTIAL_TYPE}")
-        if length == 1:
+
+        return value
+
+
+class PresentationType(Validator):
+    """Presentation Type."""
+
+    PRESENTATIONL_TYPE = "VerifiablePresentation"
+    EXAMPLE = [PRESENTATIONL_TYPE]
+
+    def __init__(self) -> None:
+        """Initialize the instance."""
+        super().__init__()
+
+    def __call__(self, value):
+        """Validate input value."""
+        length = len(value)
+        if length < 1 or PresentationType.PRESENTATIONL_TYPE not in value:
             raise ValidationError(
-                "type must include additional, more narrow,"
-                " types (e.g. UniversityDegreeCredential)"
+                f"type must include {PresentationType.PRESENTATIONL_TYPE}"
             )
 
         return value
@@ -833,6 +849,28 @@ class CredentialSubject(Validator):
                     raise ValidationError(
                         f'credential subject id {subject["id"]} must be URI'
                     ) from None
+
+        return value
+
+
+class CredentialStatus(Validator):
+    """Credential status."""
+
+    EXAMPLE = {
+        "id": "https://example.com/credentials/status/3#94567",
+        "type": "BitstringStatusListEntry",
+        "statusPurpose": "revocation",
+        "statusListIndex": "94567",
+        "statusListCredential": "https://example.com/credentials/status/3",
+    }
+
+    def __init__(self) -> None:
+        """Initialize the instance."""
+        super().__init__()
+
+    def __call__(self, value):
+        """Validate input value."""
+        # TODO write some tests
 
         return value
 
@@ -976,6 +1014,12 @@ URI_EXAMPLE = Uri.EXAMPLE
 
 CREDENTIAL_SUBJECT_VALIDATE = CredentialSubject()
 CREDENTIAL_SUBJECT_EXAMPLE = CredentialSubject.EXAMPLE
+
+CREDENTIAL_STATUS_VALIDATE = CredentialStatus()
+CREDENTIAL_STATUS_EXAMPLE = CredentialStatus.EXAMPLE
+
+PRESENTATION_TYPE_VALIDATE = PresentationType()
+PRESENTATION_TYPE_EXAMPLE = PresentationType.EXAMPLE
 
 INDY_OR_KEY_DID_VALIDATE = IndyOrKeyDID()
 INDY_OR_KEY_DID_EXAMPLE = IndyOrKeyDID.EXAMPLE

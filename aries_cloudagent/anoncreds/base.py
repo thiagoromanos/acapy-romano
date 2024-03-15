@@ -1,4 +1,5 @@
 """Base Registry."""
+
 from abc import ABC, abstractmethod
 from typing import Generic, Optional, Pattern, Sequence, TypeVar
 
@@ -13,13 +14,12 @@ from .models.anoncreds_cred_def import (
 from .models.anoncreds_revocation import (
     GetRevListResult,
     GetRevRegDefResult,
-    RevRegDef,
-    RevRegDefResult,
     RevList,
     RevListResult,
+    RevRegDef,
+    RevRegDefResult,
 )
 from .models.anoncreds_schema import AnonCredsSchema, GetSchemaResult, SchemaResult
-
 
 T = TypeVar("T")
 
@@ -36,7 +36,7 @@ class AnonCredsObjectNotFound(BaseAnonCredsError):
     ):
         """Constructor."""
         super().__init__(message, resolution_metadata)
-        self.resolution_metadata = resolution_metadata
+        self.resolution_metadata = resolution_metadata or {}
 
 
 class AnonCredsRegistrationError(BaseAnonCredsError):

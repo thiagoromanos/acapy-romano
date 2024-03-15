@@ -6,26 +6,26 @@ import os
 import random
 import sys
 import time
+from typing import List
+
 import yaml
-
-from qrcode import QRCode
-
 from aiohttp import ClientError
+from qrcode import QRCode
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from runners.support.agent import (  # noqa:E402
-    DemoAgent,
-    default_genesis_txns,
-    start_mediator_agent,
-    connect_wallet_to_mediator,
-    start_endorser_agent,
-    connect_wallet_to_endorser,
-    WALLET_TYPE_INDY,
     CRED_FORMAT_INDY,
     CRED_FORMAT_JSON_LD,
     DID_METHOD_KEY,
     KEY_TYPE_BLS,
+    WALLET_TYPE_INDY,
+    DemoAgent,
+    connect_wallet_to_endorser,
+    connect_wallet_to_mediator,
+    default_genesis_txns,
+    start_endorser_agent,
+    start_mediator_agent,
 )
 from runners.support.utils import (  # noqa:E402
     check_requires,
@@ -34,7 +34,6 @@ from runners.support.utils import (  # noqa:E402
     log_status,
     log_timer,
 )
-
 
 CRED_PREVIEW_TYPE = "https://didcomm.org/issue-credential/2.0/credential-preview"
 SELF_ATTESTED = os.getenv("SELF_ATTESTED")
@@ -60,9 +59,10 @@ class AriesAgent(DemoAgent):
         log_file: str = None,
         log_config: str = None,
         log_level: str = None,
+        extra_args: List[str] = [],
         **kwargs,
     ):
-        extra_args = []
+        extra_args = extra_args or []
         if not no_auto:
             extra_args.extend(
                 (
@@ -711,6 +711,7 @@ class AgentContainer:
         log_file: str = None,
         log_config: str = None,
         log_level: str = None,
+        extra_args: List[str] = None,
     ):
         # configuration parameters
         self.genesis_txns = genesis_txns
@@ -750,6 +751,7 @@ class AgentContainer:
         self.agent = None
         self.mediator_agent = None
         self.taa_accept = taa_accept
+        self.extra_args = extra_args
 
     async def initialize(
         self,
@@ -786,6 +788,7 @@ class AgentContainer:
                 log_file=self.log_file,
                 log_config=self.log_config,
                 log_level=self.log_level,
+                extra_args=self.extra_args,
             )
         else:
             self.agent = the_agent
@@ -1014,12 +1017,14 @@ class AgentContainer:
             CRED_FORMAT_INDY,
         ]:
             indy_proof_request = {
-                "name": proof_request["name"]
-                if "name" in proof_request
-                else "Proof of stuff",
-                "version": proof_request["version"]
-                if "version" in proof_request
-                else "1.0",
+                "name": (
+                    proof_request["name"]
+                    if "name" in proof_request
+                    else "Proof of stuff"
+                ),
+                "version": (
+                    proof_request["version"] if "version" in proof_request else "1.0"
+                ),
                 "requested_attributes": proof_request["requested_attributes"],
                 "requested_predicates": proof_request["requested_predicates"],
             }
@@ -1159,8 +1164,7 @@ class AgentContainer:
         )
 
     async def admin_GET(self, path, text=False, params=None) -> dict:
-        """
-        Execute an admin GET request in the context of the current wallet.
+        """Execute an admin GET request in the context of the current wallet.
 
         path = /path/of/request
         text = True if the expected response is text, False if json data
@@ -1168,20 +1172,22 @@ class AgentContainer:
         """
         return await self.agent.admin_GET(path, text=text, params=params)
 
-    async def admin_POST(self, path, data=None, text=False, params=None) -> dict:
-        """
-        Execute an admin POST request in the context of the current wallet.
+    async def admin_POST(
+        self, path, data=None, text=False, params=None, raise_error=True
+    ) -> dict:
+        """Execute an admin POST request in the context of the current wallet.
 
         path = /path/of/request
         data = payload to post with the request
         text = True if the expected response is text, False if json data
         params = any additional parameters to pass with the request
         """
-        return await self.agent.admin_POST(path, data=data, text=text, params=params)
+        return await self.agent.admin_POST(
+            path, data=data, text=text, params=params, raise_error=raise_error
+        )
 
     async def admin_PATCH(self, path, data=None, text=False, params=None) -> dict:
-        """
-        Execute an admin PATCH request in the context of the current wallet.
+        """Execute an admin PATCH request in the context of the current wallet.
 
         path = /path/of/request
         data = payload to post with the request
@@ -1191,8 +1197,7 @@ class AgentContainer:
         return await self.agent.admin_PATCH(path, data=data, text=text, params=params)
 
     async def admin_PUT(self, path, data=None, text=False, params=None) -> dict:
-        """
-        Execute an admin PUT request in the context of the current wallet.
+        """Execute an admin PUT request in the context of the current wallet.
 
         path = /path/of/request
         data = payload to post with the request
@@ -1202,18 +1207,16 @@ class AgentContainer:
         return await self.agent.admin_PUT(path, data=data, text=text, params=params)
 
     async def admin_DELETE(self, path, data=None, text=False, params=None) -> dict:
-        """
-        Execute an admin DELETE request in the context of the current wallet.
+        """Execute an admin DELETE request in the context of the current wallet.
         path = /path/of/request
         data = payload to post with the request
         text = True if the expected response is text, False if json data
-        params = any additional parameters to pass with the request
+        params = any additional parameters to pass with the request.
         """
         return await self.agent.admin_DELETE(path, data=data, text=text, params=params)
 
     async def agency_admin_GET(self, path, text=False, params=None) -> dict:
-        """
-        Execute an agency GET request in the context of the base wallet (multitenant only).
+        """Execute an agency GET request in the context of the base wallet (multitenant only).
 
         path = /path/of/request
         text = True if the expected response is text, False if json data
@@ -1222,8 +1225,7 @@ class AgentContainer:
         return await self.agent.agency_admin_GET(path, text=text, params=params)
 
     async def agency_admin_POST(self, path, data=None, text=False, params=None) -> dict:
-        """
-        Execute an agency POST request in the context of the base wallet (multitenant only).
+        """Execute an agency POST request in the context of the base wallet (multitenant only).
 
         path = /path/of/request
         data = payload to post with the request
@@ -1236,8 +1238,7 @@ class AgentContainer:
 
 
 def arg_parser(ident: str = None, port: int = 8020):
-    """
-    Standard command-line arguments.
+    """Standard command-line arguments.
 
     "ident", if specified, refers to one of the standard demo personas - alice, faber, acme or performance.
     """
@@ -1390,14 +1391,14 @@ def arg_parser(ident: str = None, port: int = 8020):
     return parser
 
 
-async def create_agent_with_args_list(in_args: list):
+async def create_agent_with_args_list(in_args: list, extra_args: list = None):
     parser = arg_parser()
     args = parser.parse_args(in_args)
 
-    return await create_agent_with_args(args)
+    return await create_agent_with_args(args, extra_args=extra_args)
 
 
-async def create_agent_with_args(args, ident: str = None):
+async def create_agent_with_args(args, ident: str = None, extra_args: list = None):
     if ("did_exchange" in args and args.did_exchange) and args.mediation:
         raise Exception(
             "DID-Exchange connection protocol is not (yet) compatible with mediation"
@@ -1507,6 +1508,7 @@ async def create_agent_with_args(args, ident: str = None):
         log_file=log_file,
         log_config=log_config,
         log_level=log_level,
+        extra_args=extra_args,
     )
 
     return agent
@@ -1581,7 +1583,7 @@ async def test_main(
 
         # alice accept invitation
         invite_details = invite["invitation"]
-        connection = await alice_container.input_invitation(invite_details)
+        await alice_container.input_invitation(invite_details)
 
         # wait for faber connection to activate
         await faber_container.detect_connection()

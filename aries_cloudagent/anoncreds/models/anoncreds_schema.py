@@ -2,12 +2,15 @@
 
 from typing import Any, Dict, List, Optional
 
+from anoncreds import Schema
 from marshmallow import EXCLUDE, fields
 from marshmallow.validate import OneOf
 
-from anoncreds import Schema
-
 from ...messaging.models.base import BaseModel, BaseModelSchema
+from ...messaging.valid import (
+    INDY_OR_KEY_DID_EXAMPLE,
+    INDY_SCHEMA_ID_EXAMPLE,
+)
 
 
 class AnonCredsSchema(BaseModel):
@@ -58,21 +61,26 @@ class AnonCredsSchemaSchema(BaseModelSchema):
         unknown = EXCLUDE
 
     issuer_id = fields.Str(
-        description="Issuer Identifier of the credential definition or schema",
+        metadata={
+            "description": "Issuer Identifier of the credential definition or schema",
+            "example": INDY_OR_KEY_DID_EXAMPLE,
+        },
         data_key="issuerId",
     )
     attr_names = fields.List(
         fields.Str(
-            description="Attribute name",
-            example="score",
+            metadata={
+                "description": "Attribute name",
+                "example": "score",
+            }
         ),
-        description="Schema attribute names",
+        metadata={"description": "Schema attribute names"},
         data_key="attrNames",
     )
     name = fields.Str(
-        description="Schema name",
+        metadata={"description": "Schema name", "example": "Example schema"}
     )
-    version = fields.Str(description="Schema version")
+    version = fields.Str(metadata={"description": "Schema version", "example": "1.0"})
 
 
 class GetSchemaResult(BaseModel):
@@ -127,7 +135,9 @@ class GetSchemaResultSchema(BaseModelSchema):
         unknown = EXCLUDE
 
     schema_value = fields.Nested(AnonCredsSchemaSchema(), data_key="schema")
-    schema_id = fields.Str(data_key="schemaId", description="Schema identifier")
+    schema_id = fields.Str(
+        metadata={"description": "Schema identifier", "example": INDY_SCHEMA_ID_EXAMPLE}
+    )
     resolution_metadata = fields.Dict()
     schema_metadata = fields.Dict()
 
@@ -179,7 +189,12 @@ class SchemaStateSchema(BaseModelSchema):
             ]
         )
     )
-    schema_id = fields.Str(description="Schema identifier")
+    schema_id = fields.Str(
+        metadata={
+            "description": "Schema identifier",
+            "example": INDY_SCHEMA_ID_EXAMPLE,
+        }
+    )
     schema_value = fields.Nested(AnonCredsSchemaSchema(), data_key="schema")
 
 
@@ -213,8 +228,8 @@ class SchemaResult(BaseModel):
         super().__init__(**kwargs)
         self.job_id = job_id
         self.schema_state = schema_state
-        self.registration_metadata = registration_metadata
-        self.schema_metadata = schema_metadata
+        self.registration_metadata = registration_metadata or {}
+        self.schema_metadata = schema_metadata or {}
 
 
 class SchemaResultSchema(BaseModelSchema):

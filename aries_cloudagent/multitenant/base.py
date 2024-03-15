@@ -1,9 +1,9 @@
 """Manager for multitenancy."""
 
+import logging
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
-import logging
-from typing import Iterable, List, Optional, cast, Tuple
+from typing import Iterable, List, Optional, Tuple, cast
 
 import jwt
 
@@ -126,7 +126,7 @@ class BaseMultitenantManager(ABC):
         self,
         base_context: InjectionContext,
         wallet_record: WalletRecord,
-        extra_settings: dict = {},
+        extra_settings: Optional[dict] = None,
         *,
         provision=False,
     ) -> Profile:
@@ -181,6 +181,7 @@ class BaseMultitenantManager(ABC):
             )
 
             await wallet_record.save(session)
+
         try:
             # provision wallet
             profile = await self.get_wallet_profile(
@@ -202,7 +203,8 @@ class BaseMultitenantManager(ABC):
                     profile, public_did_info.verkey
                 )
         except Exception:
-            await wallet_record.delete_record(session)
+            async with self._profile.session() as session:
+                await wallet_record.delete_record(session)
             raise
 
         return wallet_record

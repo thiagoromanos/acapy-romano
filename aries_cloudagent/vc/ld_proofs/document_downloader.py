@@ -2,12 +2,14 @@
 
 Allows keeping some context in local filesystem.
 """
+
 import logging
 import re
 import string
 from typing import Dict, Optional
 import urllib.parse as urllib_parse
 from importlib import resources
+from ...version import __version__
 
 import requests
 from pyld import jsonld
@@ -42,6 +44,7 @@ class StaticCacheJsonLdDownloader:
         "https://w3id.org/security/v1": "security-v1-context.jsonld",
         "https://w3id.org/security/v2": "security-v2-context.jsonld",
         "https://w3id.org/security/suites/ed25519-2020/v1": "ed25519-2020-context.jsonld",
+        "https://w3id.org/security/bbs/v1": "bbs-v1-context.jsonld",
     }
 
     def __init__(
@@ -120,6 +123,7 @@ class JsonLdDocumentDownloader:
             headers = options.get("headers")
             if headers is None:
                 headers = {"Accept": "application/ld+json, application/json"}
+            headers["User-Agent"] = f"AriesCloudAgent/{__version__}"
             response = requests.get(url, headers=headers, **kwargs)
 
             content_type = response.headers.get("content-type")

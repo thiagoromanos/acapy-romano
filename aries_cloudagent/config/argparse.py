@@ -805,6 +805,57 @@ class LedgerGroup(ArgumentGroup):
 
     def add_arguments(self, parser: ArgumentParser):
         """Add ledger-specific command line arguments to the parser."""
+        # for besu 
+        parser.add_argument(
+            "--account-address",
+            type=str,
+            metavar="<account>",
+            dest="account_address",
+            env_var="ACCOUNT_ADDRESS",
+            help=(
+                "Specifies the user address from besu"
+            ),
+        )
+        parser.add_argument(
+            "--private-account-key",
+            type=str,
+            metavar="<account>",
+            dest="private_account_key",
+            env_var="PRIVATE_ACCOUNT_KEY",
+            help=(
+                "Specifies the user account private key"
+            ),
+        )
+        parser.add_argument(
+            "--besu-provider-url",
+            type=str,
+            metavar="<besu>",
+            dest="besu_provider_url",
+            env_var="BESU_PROVIDER_URL",
+            help=(
+                "Specifies the url of the besu provider "
+            ),
+        )
+        parser.add_argument(
+            "--schema-contract-address",
+            type=str,
+            metavar="<contract>",
+            dest="schema_contract_address",
+            env_var="SCHEMA_CONTRACT_ADDRESS",
+            help=(
+                "Specifies the schema contract address"
+            ),
+        )
+        parser.add_argument(
+            "--credef-contract-address",
+            type=str,
+            metavar="<contract>",
+            dest="credef_contract_address",
+            env_var="CREDF_CONTRACT_ADDRESS",
+            help=(
+                "Specifies the credf contract address"
+            ),
+        )
         parser.add_argument(
             "--ledger-pool-name",
             type=str,
@@ -909,6 +960,12 @@ class LedgerGroup(ArgumentGroup):
     def get_settings(self, args: Namespace) -> dict:
         """Extract ledger settings."""
         settings = {}
+        settings["ledger.schema_contract_address"] = args.schema_contract_address
+        settings["ledger.besu_provider_url"] = args.besu_provider_url
+        settings["ledger.credef_contract_address"] = args.credef_contract_address
+        settings["ledger.private_account_key"] = args.private_account_key
+        settings["ledger.account_address"] = args.account_address
+
         if args.no_ledger:
             settings["ledger.disabled"] = True
         else:

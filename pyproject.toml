@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "aries_cloudagent"
-version = "0.11.0"
+version = "0.11.0+cpqd1"
 description = "Hyperledger Aries Cloud Agent Python (ACA-Py) is a foundation for building decentralized identity applications and services running in non-mobile environments. "
-authors = ["Hyperledger Aries <aries@lists.hyperledger.org>"]
+authors = ["Hyperledger Aries <aries@lists.hyperledger.org>","Antonio Mateus <amateus@cpqd.com.br>"]
 license = "Apache-2.0"
 readme = "README.md"
 packages = [{include = "aries_cloudagent"}]
@@ -18,6 +18,7 @@ repository = "https://github.com/hyperledger/aries-cloudagent-python"
 python = "^3.9"
 aiohttp="~3.9.0"
 aiohttp-apispec="~2.2.1"
+web3="6.12.0"
 aiohttp-cors="~0.7.0"
 apispec="~3.3.0"
 async-timeout="~4.0.2"
@@ -43,7 +44,7 @@ pytz="~2021.1"
 pyyaml="~6.0.1"
 qrcode = {version = ">=6.1,<7.0", extras = ["pil"]}
 requests="~2.31.0"
-rlp="1.2.0"
+rlp="3.0.0"
 unflatten="~0.1"
 sd-jwt = "^0.10.3"
 did-peer-2 = "^0.1.2"

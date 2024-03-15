@@ -25,6 +25,9 @@ from ..core.profile import Profile
 from ..ledger.base import BaseLedger
 from ..wallet.error import WalletNotFoundError
 from .models.anoncreds_cred_def import CredDef
+from base58 import alphabet
+
+B58 = alphabet if isinstance(alphabet, str) else alphabet.decode("ascii")
 
 LOGGER = logging.getLogger(__name__)
 
@@ -142,8 +145,8 @@ class AnonCredsHolder:
             ) = await asyncio.get_event_loop().run_in_executor(
                 None,
                 CredentialRequest.create,
+                holder_did, # FIX ME PLEEEEASE
                 None,
-                holder_did,
                 credential_definition.to_native(),
                 secret,
                 AnonCredsHolder.MASTER_SECRET_ID,
@@ -206,27 +209,53 @@ class AnonCredsHolder:
 
         schema_id = cred_recvd.schema_id
         schema_id_parts = re.match(r"^(\w+):2:([^:]+):([^:]+)$", schema_id)
+        if 'indy2'in schema_id:
+             INDY_SCHEMA_ID = rf"^(did:indy2)?:.+:[{B58}]{{21,22}}/anoncreds/v0/SCHEMA/.+/[0-9.]+$"
+             schema_id_parts = re.match(INDY_SCHEMA_ID, schema_id)
         if not schema_id_parts:
             raise AnonCredsHolderError(
                 f"Error parsing credential schema ID: {schema_id}"
             )
-        cred_def_id = cred_recvd.cred_def_id
-        cdef_id_parts = re.match(r"^(\w+):3:CL:([^:]+):([^:]+)$", cred_def_id)
+        cred_def_id = cred_recvd.cred_def_id    
+        cdef_id_parts = re.match(r"^(\w+):3:CL:([^:]+):([^:]+)$", cred_def_id)        
+        if 'indy2' in cred_def_id:
+            INDY_CRED_DEF_ID = (
+            rf"^((did:indy2)?:.+:[{B58}]{{21,22}})"  # issuer DID
+            f"/anoncreds/v0/CLAIM_DEF/"  # cred def id marker
+            # f":CL"  # sig alg
+            rf"((did:indy2)?:.+:[{B58}]{{21,22}}/anoncreds/v0/SCHEMA/.+/[0-9.]+)"  # schema txn / id
+            f"/(.+)?$"  # tag
+            )
+            cdef_id_parts = re.match(INDY_CRED_DEF_ID, cred_def_id)        
         if not cdef_id_parts:
             raise AnonCredsHolderError(
                 f"Error parsing credential definition ID: {cred_def_id}"
             )
 
         credential_id = credential_id or str(uuid.uuid4())
-        tags = {
-            "schema_id": schema_id,
-            "schema_issuer_did": schema_id_parts[1],
-            "schema_name": schema_id_parts[2],
-            "schema_version": schema_id_parts[3],
-            "issuer_did": cdef_id_parts[1],
-            "cred_def_id": cred_def_id,
-            "rev_reg_id": cred_recvd.rev_reg_id or "None",
-        }
+        tags = {}
+        if 'indy2' in cred_def_id and 'indy2' in schema_id:
+            schema_id_parts = schema_id.split('/')
+            cdef_id_parts = cred_def_id.split('/')
+            tags = {
+                "schema_id": schema_id,
+                "schema_issuer_did": schema_id_parts[0],
+                "schema_name": schema_id_parts[4],
+                "schema_version": schema_id_parts[5],
+                "issuer_did": cdef_id_parts[0],
+                "cred_def_id": cred_def_id,
+                "rev_reg_id": cred_recvd.rev_reg_id or "None",
+            }
+        else:
+            tags = {
+                "schema_id": schema_id,
+                "schema_issuer_did": schema_id_parts[1],
+                "schema_name": schema_id_parts[2],
+                "schema_version": schema_id_parts[3],
+                "issuer_did": cdef_id_parts[1],
+                "cred_def_id": cred_def_id,
+                "rev_reg_id": cred_recvd.rev_reg_id or "None",
+            }
 
         # FIXME - sdk has some special handling for fully qualified DIDs here
 

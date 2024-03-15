@@ -15,6 +15,14 @@ async def setup(context: InjectionContext):
         LOGGER.error("No AnonCredsRegistry instance found in context!!!")
         return
 
+    besu_registry = ClassProvider(
+        "aries_cloudagent.anoncreds.default.did_besu.registry.DIDBesuRegistry",
+        # supported_identifiers=[],
+        # method_name="did:indy2",
+    ).provide(context.settings, context.injector)
+    await besu_registry.setup(context)
+    registry.register(besu_registry)
+
     indy_registry = ClassProvider(
         "aries_cloudagent.anoncreds.default.did_indy.registry.DIDIndyRegistry",
         # supported_identifiers=[],

@@ -148,7 +148,7 @@ class V20CredFilterIndySchema(OpenAPISchema):
             "example": INDY_SCHEMA_ID_EXAMPLE,
         },
     )
-    schema_issuer_did = fields.Str(
+    schema_issuer_id = fields.Str(
         required=False,
         validate=INDY_DID_VALIDATE,
         metadata={"description": "Schema issuer DID", "example": INDY_DID_EXAMPLE},
@@ -162,7 +162,7 @@ class V20CredFilterIndySchema(OpenAPISchema):
         validate=INDY_VERSION_VALIDATE,
         metadata={"description": "Schema version", "example": INDY_VERSION_EXAMPLE},
     )
-    issuer_did = fields.Str(
+    issuer_id = fields.Str(
         required=False,
         validate=INDY_DID_VALIDATE,
         metadata={"description": "Credential issuer DID", "example": INDY_DID_EXAMPLE},

@@ -11,7 +11,10 @@ from ......anoncreds.revocation import AnonCredsRevocation
 from ......anoncreds.registry import AnonCredsRegistry
 from ......anoncreds.holder import AnonCredsHolder, AnonCredsHolderError
 from ......anoncreds.issuer import (
-    AnonCredsIssuer,
+    AnonCredsIssuer, AnonCredsIssuerError,
+)
+from ......anoncreds.base import (
+        AnonCredsResolutionError, AnonCredsObjectNotFound
 )
 from ......indy.models.cred import IndyCredentialSchema
 from ......indy.models.cred_abstract import IndyCredAbstractSchema
@@ -22,6 +25,9 @@ from ......ledger.multiple_ledger.ledger_requests_executor import (
     GET_CRED_DEF,
     IndyLedgerRequestsExecutor,
 )
+
+from ......ledger.error import LedgerError
+
 from ......messaging.credential_definitions.util import (
     CRED_DEF_SENT_RECORD_TYPE,
     CredDefQueryStringSchema,
@@ -45,8 +51,23 @@ from ...messages.cred_request import V20CredRequest
 from ...models.cred_ex_record import V20CredExRecord
 from ...models.detail.indy import V20CredExRecordIndy
 from ..handler import CredFormatAttachment, V20CredFormatError, V20CredFormatHandler
+from web3 import Web3
 
 LOGGER = logging.getLogger(__name__)
+DID_REGISTRY_ADDRESS = ""
+SCHEMA_REGISTRY_ADDRESS = "0x32Cf1f3a98aeAF57b88b3740875D19912A522c1A"
+CRED_DEF_REGISTRY_ADDRESS = "0xD3aA556287Afe63102e5797BFDDd2A1E8DbB3eA5"
+VALIDATOR_CONTROL_ADDRESS = ""
+ROLE_CONTROL_ADDRESS = ""
+
+ROLE_CONTROL_ABI = ""
+VALIDATOR_CONTROL_ABI = ""
+CRED_DEF_REGISTRY_ABI = '[    {     "inputs": [      {       "internalType": "address",       "name": "target",       "type": "address"      }     ],     "name": "AddressEmptyCode",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "CredentialDefinitionAlreadyExist",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "CredentialDefinitionNotFound",     "type": "error"    },    {     "inputs": [      {       "internalType": "address",       "name": "implementation",       "type": "address"      }     ],     "name": "ERC1967InvalidImplementation",     "type": "error"    },    {     "inputs": [],     "name": "ERC1967NonPayable",     "type": "error"    },    {     "inputs": [],     "name": "FailedInnerCall",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "name",       "type": "string"      }     ],     "name": "FieldRequired",     "type": "error"    },    {     "inputs": [],     "name": "InvalidInitialization",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "InvalidIssuerId",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "IssuerHasBeenDeactivated",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "IssuerNotFound",     "type": "error"    },    {     "inputs": [],     "name": "NotInitializing",     "type": "error"    },    {     "inputs": [],     "name": "PackedPtrLen__LenOverflow",     "type": "error"    },    {     "inputs": [],     "name": "PackedPtrLen__PtrOverflow",     "type": "error"    },    {     "inputs": [      {       "internalType": "address",       "name": "sender",       "type": "address"      },      {       "internalType": "address",       "name": "owner",       "type": "address"      }     ],     "name": "SenderIsNotIssuerDidOwner",     "type": "error"    },    {     "inputs": [],     "name": "UUPSUnauthorizedCallContext",     "type": "error"    },    {     "inputs": [      {       "internalType": "bytes32",       "name": "slot",       "type": "bytes32"      }     ],     "name": "UUPSUnsupportedProxiableUUID",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "credDefType",       "type": "string"      }     ],     "name": "UnsupportedCredentialDefinitionType",     "type": "error"    },    {     "anonymous": false,     "inputs": [      {       "indexed": false,       "internalType": "string",       "name": "credentialDefinitionId",       "type": "string"      },      {       "indexed": true,       "internalType": "address",       "name": "sender",       "type": "address"      }     ],     "name": "CredentialDefinitionCreated",     "type": "event"    },    {     "anonymous": false,     "inputs": [      {       "indexed": false,       "internalType": "uint64",       "name": "version",       "type": "uint64"      }     ],     "name": "Initialized",     "type": "event"    },    {     "anonymous": false,     "inputs": [      {       "indexed": true,       "internalType": "address",       "name": "implementation",       "type": "address"      }     ],     "name": "Upgraded",     "type": "event"    },    {     "anonymous": false,     "inputs": [      {       "indexed": false,       "internalType": "string",       "name": "reason",       "type": "string"      }     ],     "name": "testError",     "type": "event"    },    {     "inputs": [],     "name": "UPGRADE_INTERFACE_VERSION",     "outputs": [      {       "internalType": "string",       "name": "",       "type": "string"      }     ],     "stateMutability": "view",     "type": "function"    },    {     "inputs": [      {       "components": [        {         "internalType": "string",         "name": "id",         "type": "string"        },        {         "internalType": "string",         "name": "issuerId",         "type": "string"        },        {         "internalType": "string",         "name": "schemaId",         "type": "string"        },        {         "internalType": "string",         "name": "credDefType",         "type": "string"        },        {         "internalType": "string",         "name": "tag",         "type": "string"        },        {         "internalType": "string",         "name": "value",         "type": "string"        }       ],       "internalType": "struct CredentialDefinition",       "name": "credDef",       "type": "tuple"      }     ],     "name": "createCredentialDefinition",     "outputs": [],     "stateMutability": "nonpayable",     "type": "function"    },    {     "inputs": [      {       "internalType": "address",       "name": "upgradeControlAddress",       "type": "address"      },      {       "internalType": "address",       "name": "didResolverAddress",       "type": "address"      },      {       "internalType": "address",       "name": "schemaRegistryAddress",       "type": "address"      }     ],     "name": "initialize",     "outputs": [],     "stateMutability": "nonpayable",     "type": "function"    },    {     "inputs": [],     "name": "proxiableUUID",     "outputs": [      {       "internalType": "bytes32",       "name": "",       "type": "bytes32"      }     ],     "stateMutability": "view",     "type": "function"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "resolveCredentialDefinition",     "outputs": [      {       "components": [        {         "components": [          {           "internalType": "string",           "name": "id",           "type": "string"          },          {           "internalType": "string",           "name": "issuerId",           "type": "string"          },          {           "internalType": "string",           "name": "schemaId",           "type": "string"          },          {           "internalType": "string",           "name": "credDefType",           "type": "string"          },          {           "internalType": "string",           "name": "tag",           "type": "string"          },          {           "internalType": "string",           "name": "value",           "type": "string"          }         ],         "internalType": "struct CredentialDefinition",         "name": "credDef",         "type": "tuple"        },        {         "components": [          {           "internalType": "uint256",           "name": "created",           "type": "uint256"          }         ],         "internalType": "struct CredentialDefinitionMetadata",         "name": "metadata",         "type": "tuple"        }       ],       "internalType": "struct CredentialDefinitionWithMetadata",       "name": "credDefWithMetadata",       "type": "tuple"      }     ],     "stateMutability": "view",     "type": "function"    },    {     "inputs": [      {       "internalType": "address",       "name": "newImplementation",       "type": "address"      },      {       "internalType": "bytes",       "name": "data",       "type": "bytes"      }     ],     "name": "upgradeToAndCall",     "outputs": [],     "stateMutability": "payable",     "type": "function"    }   ]'
+SCHEMA_REGISTRY_ABI = '[    {     "inputs": [      {       "internalType": "address",       "name": "target",       "type": "address"      }     ],     "name": "AddressEmptyCode",     "type": "error"    },    {     "inputs": [      {       "internalType": "address",       "name": "implementation",       "type": "address"      }     ],     "name": "ERC1967InvalidImplementation",     "type": "error"    },    {     "inputs": [],     "name": "ERC1967NonPayable",     "type": "error"    },    {     "inputs": [],     "name": "FailedInnerCall",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "name",       "type": "string"      }     ],     "name": "FieldRequired",     "type": "error"    },    {     "inputs": [],     "name": "InvalidInitialization",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "InvalidIssuerId",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "InvalidSchemaId",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "IssuerHasBeenDeactivated",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "IssuerNotFound",     "type": "error"    },    {     "inputs": [],     "name": "NotInitializing",     "type": "error"    },    {     "inputs": [],     "name": "PackedPtrLen__LenOverflow",     "type": "error"    },    {     "inputs": [],     "name": "PackedPtrLen__PtrOverflow",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "SchemaAlreadyExist",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "SchemaNotFound",     "type": "error"    },    {     "inputs": [      {       "internalType": "address",       "name": "sender",       "type": "address"      },      {       "internalType": "address",       "name": "owner",       "type": "address"      }     ],     "name": "SenderIsNotIssuerDidOwner",     "type": "error"    },    {     "inputs": [],     "name": "UUPSUnauthorizedCallContext",     "type": "error"    },    {     "inputs": [      {       "internalType": "bytes32",       "name": "slot",       "type": "bytes32"      }     ],     "name": "UUPSUnsupportedProxiableUUID",     "type": "error"    },    {     "anonymous": false,     "inputs": [      {       "indexed": false,       "internalType": "uint64",       "name": "version",       "type": "uint64"      }     ],     "name": "Initialized",     "type": "event"    },    {     "anonymous": false,     "inputs": [      {       "indexed": false,       "internalType": "string",       "name": "schemaId",       "type": "string"      },      {       "indexed": true,       "internalType": "address",       "name": "sender",       "type": "address"      }     ],     "name": "SchemaCreated",     "type": "event"    },    {     "anonymous": false,     "inputs": [      {       "indexed": true,       "internalType": "address",       "name": "implementation",       "type": "address"      }     ],     "name": "Upgraded",     "type": "event"    },    {     "anonymous": false,     "inputs": [      {       "indexed": false,       "internalType": "string",       "name": "reason",       "type": "string"      }     ],     "name": "testError",     "type": "event"    },    {     "inputs": [],     "name": "UPGRADE_INTERFACE_VERSION",     "outputs": [      {       "internalType": "string",       "name": "",       "type": "string"      }     ],     "stateMutability": "view",     "type": "function"    },    {     "inputs": [      {       "components": [        {         "internalType": "string",         "name": "id",         "type": "string"        },        {         "internalType": "string",         "name": "issuerId",         "type": "string"        },        {         "internalType": "string",         "name": "name",         "type": "string"        },        {         "internalType": "string",         "name": "version",         "type": "string"        },        {         "internalType": "string[]",         "name": "attrNames",         "type": "string[]"        }       ],       "internalType": "struct Schema",       "name": "schema",       "type": "tuple"      }     ],     "name": "createSchema",     "outputs": [],     "stateMutability": "nonpayable",     "type": "function"    },    {     "inputs": [      {       "internalType": "address",       "name": "upgradeControlAddress",       "type": "address"      },      {       "internalType": "address",       "name": "didResolverAddress",       "type": "address"      }     ],     "name": "initialize",     "outputs": [],     "stateMutability": "nonpayable",     "type": "function"    },    {     "inputs": [],     "name": "proxiableUUID",     "outputs": [      {       "internalType": "bytes32",       "name": "",       "type": "bytes32"      }     ],     "stateMutability": "view",     "type": "function"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "resolveSchema",     "outputs": [      {       "components": [        {         "components": [          {           "internalType": "string",           "name": "id",           "type": "string"          },          {           "internalType": "string",           "name": "issuerId",           "type": "string"          },          {           "internalType": "string",           "name": "name",           "type": "string"          },          {           "internalType": "string",           "name": "version",           "type": "string"          },          {           "internalType": "string[]",           "name": "attrNames",           "type": "string[]"          }         ],         "internalType": "struct Schema",         "name": "schema",         "type": "tuple"        },        {         "components": [          {           "internalType": "uint256",           "name": "created",           "type": "uint256"          }         ],         "internalType": "struct SchemaMetadata",         "name": "metadata",         "type": "tuple"        }       ],       "internalType": "struct SchemaWithMetadata",       "name": "schemaWithMetadata",       "type": "tuple"      }     ],     "stateMutability": "view",     "type": "function"    },    {     "inputs": [      {       "internalType": "address",       "name": "newImplementation",       "type": "address"      },      {       "internalType": "bytes",       "name": "data",       "type": "bytes"      }     ],     "name": "upgradeToAndCall",     "outputs": [],     "stateMutability": "payable",     "type": "function"    }   ]'
+DID_REGISTRY_ABI = ""
+
+HTTP_PROVIDER = "http://127.0.0.1:8545"
+ACCOUNT = "0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1"
 
 
 class AnonCredsCredFormatHandler(V20CredFormatHandler):
@@ -192,7 +213,6 @@ class AnonCredsCredFormatHandler(V20CredFormatHandler):
         """Create indy credential offer."""
 
         issuer = AnonCredsIssuer(self.profile)
-        ledger = self.profile.inject(BaseLedger)
         cache = self.profile.inject_or(BaseCache)
 
         cred_def_id = await issuer.match_created_credential_definitions(
@@ -203,20 +223,50 @@ class AnonCredsCredFormatHandler(V20CredFormatHandler):
             offer_json = await issuer.create_credential_offer(cred_def_id)
             return json.loads(offer_json)
 
-        multitenant_mgr = self.profile.inject_or(BaseMultitenantManager)
-        if multitenant_mgr:
-            ledger_exec_inst = IndyLedgerRequestsExecutor(self.profile)
-        else:
-            ledger_exec_inst = self.profile.inject(IndyLedgerRequestsExecutor)
-        ledger = (
-            await ledger_exec_inst.get_ledger_for_identifier(
-                cred_def_id,
-                txn_record_type=GET_CRED_DEF,
-            )
-        )[1]
-        async with ledger:
-            schema_id = await ledger.credential_definition_id2schema_id(cred_def_id)
-            schema = await ledger.get_schema(schema_id)
+        schema = None
+        if "indy2" in cred_def_id:
+            web3 = Web3(Web3.HTTPProvider(self.profile.settings["ledger.besu_provider_url"]))
+            abi = json.loads(SCHEMA_REGISTRY_ABI)
+            address = web3.to_checksum_address(self.profile.settings["ledger.schema_contract_address"])
+            contract = web3.eth.contract(address=address, abi=abi)            
+            schema_id = cred_def_id.split('CLAIM_DEF/')[1].split('/')
+            schema_id.pop()
+            schema_id = '/'.join(schema_id)
+            try:
+                schema = contract.functions.resolveSchema(schema_id).call()        
+                if schema is None:
+                    raise AnonCredsObjectNotFound(
+                        f"Schema not found: {schema_id}",
+                        {"ledger_id": "besu"},
+                    )
+                schema = schema[0]
+                LOGGER.debug(f"SCHEMA: {schema}")
+                schema = {
+                    "ver": "1.0",
+                    "id": schema[0],
+                    "name": schema[2],
+                    "version": schema[3],
+                    "attrNames": schema[4],
+                    "seqNo": "besu",
+                }                
+            except LedgerError as err:
+                raise AnonCredsResolutionError("Failed to retrieve schema") from err
+        else:                            
+            ledger = self.profile.inject(BaseLedger)
+            multitenant_mgr = self.profile.inject_or(BaseMultitenantManager)
+            if multitenant_mgr:
+                ledger_exec_inst = IndyLedgerRequestsExecutor(self.profile)
+            else:
+                ledger_exec_inst = self.profile.inject(IndyLedgerRequestsExecutor)
+            ledger = (
+                await ledger_exec_inst.get_ledger_for_identifier(
+                    cred_def_id,
+                    txn_record_type=GET_CRED_DEF,
+                )
+            )[1]
+            async with ledger:
+                schema_id = await ledger.credential_definition_id2schema_id(cred_def_id)
+                schema = await ledger.get_schema(schema_id)        
         schema_attrs = set(schema["attrNames"])
         preview_attrs = set(cred_proposal_message.credential_preview.attr_dict())
         if preview_attrs != schema_attrs:

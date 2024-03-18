@@ -89,7 +89,7 @@ VALIDATOR_CONTROL_ABI = ""
 CRED_DEF_REGISTRY_ABI = '[    {     "inputs": [      {       "internalType": "address",       "name": "target",       "type": "address"      }     ],     "name": "AddressEmptyCode",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "CredentialDefinitionAlreadyExist",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "CredentialDefinitionNotFound",     "type": "error"    },    {     "inputs": [      {       "internalType": "address",       "name": "implementation",       "type": "address"      }     ],     "name": "ERC1967InvalidImplementation",     "type": "error"    },    {     "inputs": [],     "name": "ERC1967NonPayable",     "type": "error"    },    {     "inputs": [],     "name": "FailedInnerCall",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "name",       "type": "string"      }     ],     "name": "FieldRequired",     "type": "error"    },    {     "inputs": [],     "name": "InvalidInitialization",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "InvalidIssuerId",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "IssuerHasBeenDeactivated",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "IssuerNotFound",     "type": "error"    },    {     "inputs": [],     "name": "NotInitializing",     "type": "error"    },    {     "inputs": [],     "name": "PackedPtrLen__LenOverflow",     "type": "error"    },    {     "inputs": [],     "name": "PackedPtrLen__PtrOverflow",     "type": "error"    },    {     "inputs": [      {       "internalType": "address",       "name": "sender",       "type": "address"      },      {       "internalType": "address",       "name": "owner",       "type": "address"      }     ],     "name": "SenderIsNotIssuerDidOwner",     "type": "error"    },    {     "inputs": [],     "name": "UUPSUnauthorizedCallContext",     "type": "error"    },    {     "inputs": [      {       "internalType": "bytes32",       "name": "slot",       "type": "bytes32"      }     ],     "name": "UUPSUnsupportedProxiableUUID",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "credDefType",       "type": "string"      }     ],     "name": "UnsupportedCredentialDefinitionType",     "type": "error"    },    {     "anonymous": false,     "inputs": [      {       "indexed": false,       "internalType": "string",       "name": "credentialDefinitionId",       "type": "string"      },      {       "indexed": true,       "internalType": "address",       "name": "sender",       "type": "address"      }     ],     "name": "CredentialDefinitionCreated",     "type": "event"    },    {     "anonymous": false,     "inputs": [      {       "indexed": false,       "internalType": "uint64",       "name": "version",       "type": "uint64"      }     ],     "name": "Initialized",     "type": "event"    },    {     "anonymous": false,     "inputs": [      {       "indexed": true,       "internalType": "address",       "name": "implementation",       "type": "address"      }     ],     "name": "Upgraded",     "type": "event"    },    {     "anonymous": false,     "inputs": [      {       "indexed": false,       "internalType": "string",       "name": "reason",       "type": "string"      }     ],     "name": "testError",     "type": "event"    },    {     "inputs": [],     "name": "UPGRADE_INTERFACE_VERSION",     "outputs": [      {       "internalType": "string",       "name": "",       "type": "string"      }     ],     "stateMutability": "view",     "type": "function"    },    {     "inputs": [      {       "components": [        {         "internalType": "string",         "name": "id",         "type": "string"        },        {         "internalType": "string",         "name": "issuerId",         "type": "string"        },        {         "internalType": "string",         "name": "schemaId",         "type": "string"        },        {         "internalType": "string",         "name": "credDefType",         "type": "string"        },        {         "internalType": "string",         "name": "tag",         "type": "string"        },        {         "internalType": "string",         "name": "value",         "type": "string"        }       ],       "internalType": "struct CredentialDefinition",       "name": "credDef",       "type": "tuple"      }     ],     "name": "createCredentialDefinition",     "outputs": [],     "stateMutability": "nonpayable",     "type": "function"    },    {     "inputs": [      {       "internalType": "address",       "name": "upgradeControlAddress",       "type": "address"      },      {       "internalType": "address",       "name": "didResolverAddress",       "type": "address"      },      {       "internalType": "address",       "name": "schemaRegistryAddress",       "type": "address"      }     ],     "name": "initialize",     "outputs": [],     "stateMutability": "nonpayable",     "type": "function"    },    {     "inputs": [],     "name": "proxiableUUID",     "outputs": [      {       "internalType": "bytes32",       "name": "",       "type": "bytes32"      }     ],     "stateMutability": "view",     "type": "function"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "resolveCredentialDefinition",     "outputs": [      {       "components": [        {         "components": [          {           "internalType": "string",           "name": "id",           "type": "string"          },          {           "internalType": "string",           "name": "issuerId",           "type": "string"          },          {           "internalType": "string",           "name": "schemaId",           "type": "string"          },          {           "internalType": "string",           "name": "credDefType",           "type": "string"          },          {           "internalType": "string",           "name": "tag",           "type": "string"          },          {           "internalType": "string",           "name": "value",           "type": "string"          }         ],         "internalType": "struct CredentialDefinition",         "name": "credDef",         "type": "tuple"        },        {         "components": [          {           "internalType": "uint256",           "name": "created",           "type": "uint256"          }         ],         "internalType": "struct CredentialDefinitionMetadata",         "name": "metadata",         "type": "tuple"        }       ],       "internalType": "struct CredentialDefinitionWithMetadata",       "name": "credDefWithMetadata",       "type": "tuple"      }     ],     "stateMutability": "view",     "type": "function"    },    {     "inputs": [      {       "internalType": "address",       "name": "newImplementation",       "type": "address"      },      {       "internalType": "bytes",       "name": "data",       "type": "bytes"      }     ],     "name": "upgradeToAndCall",     "outputs": [],     "stateMutability": "payable",     "type": "function"    }   ]'
 SCHEMA_REGISTRY_ABI = '[    {     "inputs": [      {       "internalType": "address",       "name": "target",       "type": "address"      }     ],     "name": "AddressEmptyCode",     "type": "error"    },    {     "inputs": [      {       "internalType": "address",       "name": "implementation",       "type": "address"      }     ],     "name": "ERC1967InvalidImplementation",     "type": "error"    },    {     "inputs": [],     "name": "ERC1967NonPayable",     "type": "error"    },    {     "inputs": [],     "name": "FailedInnerCall",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "name",       "type": "string"      }     ],     "name": "FieldRequired",     "type": "error"    },    {     "inputs": [],     "name": "InvalidInitialization",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "InvalidIssuerId",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "InvalidSchemaId",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "IssuerHasBeenDeactivated",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "IssuerNotFound",     "type": "error"    },    {     "inputs": [],     "name": "NotInitializing",     "type": "error"    },    {     "inputs": [],     "name": "PackedPtrLen__LenOverflow",     "type": "error"    },    {     "inputs": [],     "name": "PackedPtrLen__PtrOverflow",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "SchemaAlreadyExist",     "type": "error"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "SchemaNotFound",     "type": "error"    },    {     "inputs": [      {       "internalType": "address",       "name": "sender",       "type": "address"      },      {       "internalType": "address",       "name": "owner",       "type": "address"      }     ],     "name": "SenderIsNotIssuerDidOwner",     "type": "error"    },    {     "inputs": [],     "name": "UUPSUnauthorizedCallContext",     "type": "error"    },    {     "inputs": [      {       "internalType": "bytes32",       "name": "slot",       "type": "bytes32"      }     ],     "name": "UUPSUnsupportedProxiableUUID",     "type": "error"    },    {     "anonymous": false,     "inputs": [      {       "indexed": false,       "internalType": "uint64",       "name": "version",       "type": "uint64"      }     ],     "name": "Initialized",     "type": "event"    },    {     "anonymous": false,     "inputs": [      {       "indexed": false,       "internalType": "string",       "name": "schemaId",       "type": "string"      },      {       "indexed": true,       "internalType": "address",       "name": "sender",       "type": "address"      }     ],     "name": "SchemaCreated",     "type": "event"    },    {     "anonymous": false,     "inputs": [      {       "indexed": true,       "internalType": "address",       "name": "implementation",       "type": "address"      }     ],     "name": "Upgraded",     "type": "event"    },    {     "anonymous": false,     "inputs": [      {       "indexed": false,       "internalType": "string",       "name": "reason",       "type": "string"      }     ],     "name": "testError",     "type": "event"    },    {     "inputs": [],     "name": "UPGRADE_INTERFACE_VERSION",     "outputs": [      {       "internalType": "string",       "name": "",       "type": "string"      }     ],     "stateMutability": "view",     "type": "function"    },    {     "inputs": [      {       "components": [        {         "internalType": "string",         "name": "id",         "type": "string"        },        {         "internalType": "string",         "name": "issuerId",         "type": "string"        },        {         "internalType": "string",         "name": "name",         "type": "string"        },        {         "internalType": "string",         "name": "version",         "type": "string"        },        {         "internalType": "string[]",         "name": "attrNames",         "type": "string[]"        }       ],       "internalType": "struct Schema",       "name": "schema",       "type": "tuple"      }     ],     "name": "createSchema",     "outputs": [],     "stateMutability": "nonpayable",     "type": "function"    },    {     "inputs": [      {       "internalType": "address",       "name": "upgradeControlAddress",       "type": "address"      },      {       "internalType": "address",       "name": "didResolverAddress",       "type": "address"      }     ],     "name": "initialize",     "outputs": [],     "stateMutability": "nonpayable",     "type": "function"    },    {     "inputs": [],     "name": "proxiableUUID",     "outputs": [      {       "internalType": "bytes32",       "name": "",       "type": "bytes32"      }     ],     "stateMutability": "view",     "type": "function"    },    {     "inputs": [      {       "internalType": "string",       "name": "id",       "type": "string"      }     ],     "name": "resolveSchema",     "outputs": [      {       "components": [        {         "components": [          {           "internalType": "string",           "name": "id",           "type": "string"          },          {           "internalType": "string",           "name": "issuerId",           "type": "string"          },          {           "internalType": "string",           "name": "name",           "type": "string"          },          {           "internalType": "string",           "name": "version",           "type": "string"          },          {           "internalType": "string[]",           "name": "attrNames",           "type": "string[]"          }         ],         "internalType": "struct Schema",         "name": "schema",         "type": "tuple"        },        {         "components": [          {           "internalType": "uint256",           "name": "created",           "type": "uint256"          }         ],         "internalType": "struct SchemaMetadata",         "name": "metadata",         "type": "tuple"        }       ],       "internalType": "struct SchemaWithMetadata",       "name": "schemaWithMetadata",       "type": "tuple"      }     ],     "stateMutability": "view",     "type": "function"    },    {     "inputs": [      {       "internalType": "address",       "name": "newImplementation",       "type": "address"      },      {       "internalType": "bytes",       "name": "data",       "type": "bytes"      }     ],     "name": "upgradeToAndCall",     "outputs": [],     "stateMutability": "payable",     "type": "function"    }   ]'
 DID_REGISTRY_ABI = ""
-
+REVOCATION_REGISTRY_ABI = '[  {   "inputs": [    {     "internalType": "address",     "name": "target",     "type": "address"    }   ],   "name": "AddressEmptyCode",   "type": "error"  },  {   "inputs": [    {     "internalType": "address",     "name": "implementation",     "type": "address"    }   ],   "name": "ERC1967InvalidImplementation",   "type": "error"  },  {   "inputs": [],   "name": "ERC1967NonPayable",   "type": "error"  },  {   "inputs": [],   "name": "FailedInnerCall",   "type": "error"  },  {   "inputs": [],   "name": "InvalidInitialization",   "type": "error"  },  {   "inputs": [    {     "internalType": "string",     "name": "id",     "type": "string"    }   ],   "name": "InvalidIssuerId",   "type": "error"  },  {   "inputs": [    {     "internalType": "string",     "name": "id",     "type": "string"    }   ],   "name": "IssuerHasBeenDeactivated",   "type": "error"  },  {   "inputs": [    {     "internalType": "string",     "name": "id",     "type": "string"    }   ],   "name": "IssuerNotFound",   "type": "error"  },  {   "inputs": [],   "name": "NotInitializing",   "type": "error"  },  {   "inputs": [    {     "internalType": "string",     "name": "id",     "type": "string"    }   ],   "name": "RevocationAlreadyExist",   "type": "error"  },  {   "inputs": [    {     "internalType": "string",     "name": "id",     "type": "string"    }   ],   "name": "RevocationNotFound",   "type": "error"  },  {   "inputs": [    {     "internalType": "address",     "name": "sender",     "type": "address"    },    {     "internalType": "address",     "name": "creator",     "type": "address"    }   ],   "name": "SenderIsNotCreator",   "type": "error"  },  {   "inputs": [    {     "internalType": "address",     "name": "sender",     "type": "address"    },    {     "internalType": "address",     "name": "owner",     "type": "address"    }   ],   "name": "SenderIsNotIssuerDidOwner",   "type": "error"  },  {   "inputs": [],   "name": "UUPSUnauthorizedCallContext",   "type": "error"  },  {   "inputs": [    {     "internalType": "bytes32",     "name": "slot",     "type": "bytes32"    }   ],   "name": "UUPSUnsupportedProxiableUUID",   "type": "error"  },  {   "anonymous": false,   "inputs": [    {     "indexed": false,     "internalType": "string",     "name": "RevocationId",     "type": "string"    },    {     "indexed": true,     "internalType": "address",     "name": "sender",     "type": "address"    }   ],   "name": "CredentialRevoked",   "type": "event"  },  {   "anonymous": false,   "inputs": [    {     "indexed": false,     "internalType": "string",     "name": "RevocationId",     "type": "string"    },    {     "indexed": true,     "internalType": "address",     "name": "sender",     "type": "address"    }   ],   "name": "CredentialUnrevoked",   "type": "event"  },  {   "anonymous": false,   "inputs": [    {     "indexed": false,     "internalType": "uint64",     "name": "version",     "type": "uint64"    }   ],   "name": "Initialized",   "type": "event"  },  {   "anonymous": false,   "inputs": [    {     "indexed": false,     "internalType": "string",     "name": "RevRegId",     "type": "string"    },    {     "indexed": true,     "internalType": "address",     "name": "sender",     "type": "address"    }   ],   "name": "RevListCreated",   "type": "event"  },  {   "anonymous": false,   "inputs": [    {     "indexed": false,     "internalType": "string",     "name": "RevocationId",     "type": "string"    },    {     "indexed": true,     "internalType": "address",     "name": "sender",     "type": "address"    }   ],   "name": "RevocationCreated",   "type": "event"  },  {   "anonymous": false,   "inputs": [    {     "indexed": true,     "internalType": "address",     "name": "implementation",     "type": "address"    }   ],   "name": "Upgraded",   "type": "event"  },  {   "inputs": [],   "name": "UPGRADE_INTERFACE_VERSION",   "outputs": [    {     "internalType": "string",     "name": "",     "type": "string"    }   ],   "stateMutability": "view",   "type": "function"  },  {   "inputs": [    {     "components": [      {       "internalType": "string",       "name": "revDefId",       "type": "string"      },      {       "internalType": "string",       "name": "regDefType",       "type": "string"      },      {       "internalType": "string",       "name": "entry",       "type": "string"      },      {       "internalType": "string",       "name": "issuerId",       "type": "string"      }     ],     "internalType": "struct RevocationRegEntry",     "name": "revEntry",     "type": "tuple"    }   ],   "name": "createOrUpdateEntry",   "outputs": [],   "stateMutability": "nonpayable",   "type": "function"  },  {   "inputs": [    {     "components": [      {       "internalType": "string",       "name": "id",       "type": "string"      },      {       "internalType": "string",       "name": "issuerId",       "type": "string"      },      {       "internalType": "string",       "name": "credDefId",       "type": "string"      }     ],     "internalType": "struct Revocation",     "name": "_revocation",     "type": "tuple"    }   ],   "name": "createRevocation",   "outputs": [],   "stateMutability": "nonpayable",   "type": "function"  },  {   "inputs": [    {     "components": [      {       "internalType": "string",       "name": "ver",       "type": "string"      },      {       "internalType": "string",       "name": "id",       "type": "string"      },      {       "internalType": "string",       "name": "revocDefType",       "type": "string"      },      {       "internalType": "string",       "name": "credDefId",       "type": "string"      },      {       "internalType": "string",       "name": "tag",       "type": "string"      },      {       "internalType": "string",       "name": "value",       "type": "string"      },      {       "internalType": "string",       "name": "issuerId",       "type": "string"      }     ],     "internalType": "struct RevocationReg",     "name": "revRegistry",     "type": "tuple"    }   ],   "name": "createRevocationRegistry",   "outputs": [],   "stateMutability": "nonpayable",   "type": "function"  },  {   "inputs": [    {     "internalType": "address",     "name": "upgradeControlAddress",     "type": "address"    },    {     "internalType": "address",     "name": "didResolverAddress",     "type": "address"    },    {     "internalType": "address",     "name": "credDefRegistryAddress",     "type": "address"    }   ],   "name": "initialize",   "outputs": [],   "stateMutability": "nonpayable",   "type": "function"  },  {   "inputs": [],   "name": "proxiableUUID",   "outputs": [    {     "internalType": "bytes32",     "name": "",     "type": "bytes32"    }   ],   "stateMutability": "view",   "type": "function"  },  {   "inputs": [    {     "internalType": "string",     "name": "id",     "type": "string"    }   ],   "name": "resolveEntry",   "outputs": [    {     "components": [      {       "components": [        {         "internalType": "string",         "name": "revDefId",         "type": "string"        },        {         "internalType": "string",         "name": "regDefType",         "type": "string"        },        {         "internalType": "string",         "name": "entry",         "type": "string"        },        {         "internalType": "string",         "name": "issuerId",         "type": "string"        }       ],       "internalType": "struct RevocationRegEntry",       "name": "revEntry",       "type": "tuple"      },      {       "components": [        {         "internalType": "uint256",         "name": "created",         "type": "uint256"        },        {         "internalType": "address",         "name": "creator",         "type": "address"        },        {         "internalType": "uint256",         "name": "updated",         "type": "uint256"        }       ],       "internalType": "struct RevocationEntryMetadata",       "name": "metadata",       "type": "tuple"      }     ],     "internalType": "struct RevocationEntryWithMetadata",     "name": "revEntryMetadata",     "type": "tuple"    }   ],   "stateMutability": "view",   "type": "function"  },  {   "inputs": [    {     "internalType": "string",     "name": "id",     "type": "string"    }   ],   "name": "resolveRevocation",   "outputs": [    {     "components": [      {       "components": [        {         "internalType": "string",         "name": "ver",         "type": "string"        },        {         "internalType": "string",         "name": "id",         "type": "string"        },        {         "internalType": "string",         "name": "revocDefType",         "type": "string"        },        {         "internalType": "string",         "name": "credDefId",         "type": "string"        },        {         "internalType": "string",         "name": "tag",         "type": "string"        },        {         "internalType": "string",         "name": "value",         "type": "string"        },        {         "internalType": "string",         "name": "issuerId",         "type": "string"        }       ],       "internalType": "struct RevocationReg",       "name": "revocationReg",       "type": "tuple"      },      {       "components": [        {         "internalType": "uint256",         "name": "created",         "type": "uint256"        },        {         "internalType": "address",         "name": "creator",         "type": "address"        },        {         "internalType": "uint256",         "name": "updated",         "type": "uint256"        }       ],       "internalType": "struct RevocationRegMetadata",       "name": "metadata",       "type": "tuple"      }     ],     "internalType": "struct RevocationRegWithMetadata",     "name": "revWithMetadata",     "type": "tuple"    }   ],   "stateMutability": "view",   "type": "function"  },  {   "inputs": [    {     "internalType": "string",     "name": "id",     "type": "string"    }   ],   "name": "revokeCredential",   "outputs": [],   "stateMutability": "nonpayable",   "type": "function"  },  {   "inputs": [    {     "internalType": "address",     "name": "newImplementation",     "type": "address"    },    {     "internalType": "bytes",     "name": "data",     "type": "bytes"    }   ],   "name": "upgradeToAndCall",   "outputs": [],   "stateMutability": "payable",   "type": "function"  } ]'
 # Ganache
 HTTP_PROVIDER = "http://127.0.0.1:8545"
 ACCOUNT = "0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1"
@@ -112,10 +112,9 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         INDY_DID = rf"^(did:indy2)?:.+:[{B58}]{{21,22}}$"
         INDY_SCHEMA_ID = rf"^(did:indy2)?:.+:[{B58}]{{21,22}}/anoncreds/v0/SCHEMA/.+/[0-9.]+$"
         # schema 
-        # ["did:indy2:testnet:SEp33q43PsdP7nDATyySSH/anoncreds/v0/SCHEMA/BasicIdentity/1.0.0","did:indy2:testnet:SEp33q43PsdP7nDATyySSH", "BasicIdentity","1.0.0", ["First Name","Last Name"]]
+        # ["did:indy2:testnet:WedHLJdFf4yMaDXdhJcL97/anoncreds/v0/SCHEMA/BasicIdentity/1.0.0","did:indy2:testnet:WedHLJdFf4yMaDXdhJcL97", "BasicIdentity","1.0.0", ["First Name","Last Name"]]
         # credef
-        # ["did:indy2:testnet:KVEBYKnsCbikaCdHaeTDoW/anoncreds/v0/CLAIM_DEF/did:indy2:testnet:KVEBYKnsCbikaCdHaeTDoW/anoncreds/v0/SCHEMA/prefs/1.0/prefs", 
-        # "did:indy2:testnet:KVEBYKnsCbikaCdHaeTDoW", "did:indy2:testnet:KVEBYKnsCbikaCdHaeTDoW/anoncreds/v0/SCHEMA/prefs/1.0", "CL", "prefs", "<keys>"]
+        # ["did:indy2:testnet:WedHLJdFf4yMaDXdhJcL97/anoncreds/v0/CLAIM_DEF/did:indy2:testnet:WedHLJdFf4yMaDXdhJcL97/anoncreds/v0/SCHEMA/BasicIdentity/1.0.0/BasicIdentity","did:indy2:testnet:WedHLJdFf4yMaDXdhJcL97", "did:indy2:testnet:WedHLJdFf4yMaDXdhJcL97/anoncreds/v0/SCHEMA/BasicIdentity/1.0.0", "CL", "BasicIdentity", "<keys>"]
         INDY_CRED_DEF_ID = (
             rf"^((did:indy2)?:.+:[{B58}]{{21,22}})"  # issuer DID
             f"/anoncreds/v0/CLAIM_DEF/"  # cred def id marker
@@ -124,10 +123,13 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
             f"/(.+)?$"  # tag
         )
         INDY_REV_REG_DEF_ID = (
-            rf"^([{B58}]{{21,22}}):4:"
-            rf"([{B58}]{{21,22}}):3:"
-            rf"CL:(([1-9][0-9]*)|([{B58}]{{21,22}}:2:.+:[0-9.]+))(:.+)?:"
-            rf"CL_ACCUM:(.+$)"
+            rf"^((did:indy2)?:.+:[{B58}]{{21,22}})"  # issuer DID
+            f"/anoncreds/v0/REV_REG/"  # cred def id marker
+           rf"((did:indy2)?:.+:[{B58}]{{21,22}})"  # issuer DID
+            f"/anoncreds/v0/CLAIM_DEF/"  # cred def id marker
+            # f":CL"  # sig alg
+            rf"((did:indy2)?:.+:[{B58}]{{21,22}}/anoncreds/v0/SCHEMA/.+/[0-9.]+)"  # schema txn / id
+            f"/(.+)?$"  # tag     
         )
         self._supported_identifiers_regex = re.compile(
             rf"{INDY_DID}|{INDY_SCHEMA_ID}|{INDY_CRED_DEF_ID}|{INDY_REV_REG_DEF_ID}"
@@ -141,6 +143,7 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         self.CRED_DEF_REGISTRY_ADDRESS = None
         self.VALIDATOR_CONTROL_ADDRESS = None
         self.ROLE_CONTROL_ADDRESS = None
+        self.REVOCATION_ADDRESS = None
 
     @property
     def supported_identifiers_regex(self) -> Pattern:
@@ -154,6 +157,7 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         self.HTTP_PROVIDER = context.settings.get('ledger.besu_provider_url')
         self.SCHEMA_REGISTRY_ADDRESS = context.settings.get('ledger.schema_contract_address')
         self.CRED_DEF_REGISTRY_ADDRESS = context.settings.get('ledger.credef_contract_address')
+        self.REVOCATION_ADDRESS = context.settings.get('ledger.revocation_contract_address')
 
         self.web3 = Web3(Web3.HTTPProvider(self.HTTP_PROVIDER))
         self.web3.middleware_onion.inject(geth_poa_middleware, layer=0)
@@ -185,8 +189,12 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
     @staticmethod
     def make_rev_reg_def_id(rev_reg_def: RevRegDef) -> str:
         """Derive the ID for a revocation registry definition."""
+        # return (
+        #     f"{rev_reg_def.issuer_id}/anoncreds/v0/REV_REG/{rev_reg_def.cred_def_id}/"
+        #     f"{rev_reg_def.type}/{rev_reg_def.tag}"
+        # )
         return (
-            f"{rev_reg_def.issuer_id}:4:{rev_reg_def.cred_def_id}:"
+            f"{rev_reg_def.issuer_id}/anoncreds/v0/REV_REG/{rev_reg_def.cred_def_id}:"
             f"{rev_reg_def.type}:{rev_reg_def.tag}"
         )
 
@@ -222,12 +230,38 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
                 schema_id=schema[0],
                 resolution_metadata={"ledger_id": "besu"},
                 schema_metadata={"seqNo": "Besu"},
-            )
-            print(result)
+            )            
         except LedgerError as err:
             raise AnonCredsResolutionError("Failed to retrieve schema") from err
-        print(result)
         return result
+    
+    async def register_revocation(
+            self, 
+            revocation_id: str,
+            issuer_id: str,
+            credDef_id: str
+
+    ) -> TxReceipt:
+        """Register a revocation on the registry. (BETA)"""
+        LOGGER.debug(f"Registering revocation: {revocation_id}")
+        rev_json = {
+            "id": revocation_id, 
+            "issuerId": issuer_id,
+            "credDefId": credDef_id
+        }
+        abi = json.loads(REVOCATION_REGISTRY_ABI)
+        address = self.web3.to_checksum_address(self.REVOCATION_ADDRESS)
+        contract = self.web3.eth.contract(address=address, abi=abi)
+        Chain_id = self.web3.eth.chain_id
+        nonce = self.web3.eth.get_transaction_count(self.ACCOUNT)
+        call_function = contract.functions.createRevocation(rev_json).build_transaction({"chainId": Chain_id, "from": self.ACCOUNT, "nonce": nonce, "gas": 3000000})
+        
+        tx_receipt = await self.send_transaction_tx(call_function)
+
+        # receipt = contract.functions.createSchema(indy_schema).transact({"from": self.ACCOUNT})
+        LOGGER.debug("Receipt: %s", tx_receipt)
+        # Was it realy created? 
+        result = contract.functions.resolveRevocation(revocation_id).call()        
 
     async def register_schema(
         self,
@@ -258,10 +292,9 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
             "attrNames": schema.attr_names
             # "seqNo": None,
         }
-        # [[],"did:indy2:testnet:SEp33q43PsdP7nDATyySSH",[],[["did:indy2:testnet:SEp33q43PsdP7nDATyySSH#KEY-1","Ed25519VerificationKey2018",
-        # "did:indy2:testnet:N22SEp33q43PsdP7nDATyySSH","zAKJP3f7BD6W4iWEQ9jwndVTCBq8ua2Utt8EEjJ6Vxsf",""]],[["did:indy2:testnet:SEp33q43PsdP7nDATyySSH#KEY-1",["","","","",""]]],[],[],[],[],[],[]]
+        # [[],"did:indy2:testnet:WedHLJdFf4yMaDXdhJcL97",[],[["did:indy2:testnet:WedHLJdFf4yMaDXdhJcL97#KEY-1","Ed25519VerificationKey2018", "did:indy2:testnet:N22WedHLJdFf4yMaDXdhJcL97","HAFkhqbPbor781QCMfNvr6oQTTixK9U7gZmDV7pszTHp",""]],[["did:indy2:testnet:WedHLJdFf4yMaDXdhJcL97#KEY-1",["","","","",""]]],[],[],[],[],[],[]]
         # credef
-        # ["did:indy2:mainnet:SEp33q43PsdP7nDATyySSH/anoncreds/v0/CLAIM_DEF/did:indy2:mainnet:SEp33q43PsdP7nDATyySSH/anoncreds/v0/SCHEMA/BasicIdentity/1.0.0/BasicIdentity","did:indy2:mainnet:SEp33q43PsdP7nDATyySSH","did:indy2:mainnet:SEp33q43PsdP7nDATyySSH/anoncreds/v0/SCHEMA/BasicIdentity/1.0.0","CL","BasicIdentity","[ \"n\": \"779...397\", \"rctxt\": \"774...977\", \"s\": \"750..893\", \"z\": \"632...005\" ]"]
+        # ["did:indy2:mainnet:WedHLJdFf4yMaDXdhJcL97/anoncreds/v0/CLAIM_DEF/did:indy2:mainnet:WedHLJdFf4yMaDXdhJcL97/anoncreds/v0/SCHEMA/BasicIdentity/1.0.0/BasicIdentity","did:indy2:mainnet:WedHLJdFf4yMaDXdhJcL97","did:indy2:mainnet:WedHLJdFf4yMaDXdhJcL97/anoncreds/v0/SCHEMA/BasicIdentity/1.0.0","CL","BasicIdentity","[ \"n\": \"779...397\", \"rctxt\": \"774...977\", \"s\": \"750..893\", \"z\": \"632...005\" ]"]
         LOGGER.debug("schema value: %s", indy_schema)
         abi = json.loads(SCHEMA_REGISTRY_ABI)
         address = self.web3.to_checksum_address(self.SCHEMA_REGISTRY_ADDRESS)
@@ -476,49 +509,59 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         self, profile: Profile, rev_reg_def_id: str
     ) -> GetRevRegDefResult:
         """Get a revocation registry definition from the registry."""
-        async with profile.session() as session:
-            multitenant_mgr = session.inject_or(BaseMultitenantManager)
-            if multitenant_mgr:
-                ledger_exec_inst = IndyLedgerRequestsExecutor(profile)
-            else:
-                ledger_exec_inst = session.inject(IndyLedgerRequestsExecutor)
+        # async with profile.session() as session:
+        #     multitenant_mgr = session.inject_or(BaseMultitenantManager)
+        #     if multitenant_mgr:
+        #         ledger_exec_inst = IndyLedgerRequestsExecutor(profile)
+        #     else:
+        #         ledger_exec_inst = session.inject(IndyLedgerRequestsExecutor)
 
-        ledger_id, ledger = await ledger_exec_inst.get_ledger_for_identifier(
-            rev_reg_def_id,
-            txn_record_type=GET_CRED_DEF,
-        )
-        if not ledger:
-            reason = "No ledger available"
-            if not profile.settings.get_value("wallet.type"):
-                reason += ": missing wallet-type?"
-            raise AnonCredsResolutionError(reason)
+        # ledger_id, ledger = await ledger_exec_inst.get_ledger_for_identifier(
+        #     rev_reg_def_id,
+        #     txn_record_type=GET_CRED_DEF,
+        # )
+        # if not ledger:
+        #     reason = "No ledger available"
+        #     if not profile.settings.get_value("wallet.type"):
+        #         reason += ": missing wallet-type?"
+        #     raise AnonCredsResolutionError(reason)
 
-        async with ledger:
-            rev_reg_def = await ledger.get_revoc_reg_def(rev_reg_def_id)
+        # async with ledger:
+        #     rev_reg_def = await ledger.get_revoc_reg_def(rev_reg_def_id)
 
-            if rev_reg_def is None:
-                raise AnonCredsObjectNotFound(
-                    f"Revocation registry definition not found: {rev_reg_def_id}",
-                    {"ledger_id": ledger_id},
-                )
+        #     if rev_reg_def is None:
+        #         raise AnonCredsObjectNotFound(
+        #             f"Revocation registry definition not found: {rev_reg_def_id}",
+        #             {"ledger_id": ledger_id},
+        #         )
 
-            LOGGER.debug("Retrieved revocation registry definition: %s", rev_reg_def)
-            rev_reg_def_value = RevRegDefValue.deserialize(rev_reg_def["value"])
+        #     LOGGER.debug("Retrieved revocation registry definition: %s", rev_reg_def)
+        abi = json.loads(REVOCATION_REGISTRY_ABI)
+        address = self.web3.to_checksum_address(self.REVOCATION_ADDRESS)
+        contract = self.web3.eth.contract(address=address, abi=abi)
+        Chain_id = self.web3.eth.chain_id
+        nonce = self.web3.eth.get_transaction_count(self.ACCOUNT)
+        result = contract.functions.resolveRevocation(rev_reg_def_id).call()  
+        LOGGER.debug(f"Receive rev_reg {result}")
+        if len(result):         
+            rev_reg_def_value = RevRegDefValue.deserialize(json.loads(result[0][5]))
+            issuer = rev_reg_def_id.split('/')[0]
+            cred_def_id = issuer+rev_reg_def_id.split(issuer)[-1].split('/CL_ACCUM')[0]
             anoncreds_rev_reg_def = RevRegDef(
-                issuer_id=rev_reg_def["id"].split(":")[0],
-                cred_def_id=rev_reg_def["credDefId"],
-                type=rev_reg_def["revocDefType"],
+                issuer_id=issuer,
+                cred_def_id=cred_def_id,
+                type=result[0][2],
                 value=rev_reg_def_value,
-                tag=rev_reg_def["tag"],
+                tag=cred_def_id.split('/')[-1],
             )
             result = GetRevRegDefResult(
                 revocation_registry=anoncreds_rev_reg_def,
-                revocation_registry_id=rev_reg_def["id"],
+                revocation_registry_id=rev_reg_def_id,
                 resolution_metadata={},
-                revocation_registry_metadata={},
+                revocation_registry_metadata={}
             )
 
-        return result
+            return result
 
     async def register_revocation_registry_definition(
         self,
@@ -538,22 +581,33 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
                 "revocDefType": revocation_registry_definition.type,
                 "credDefId": revocation_registry_definition.cred_def_id,
                 "tag": revocation_registry_definition.tag,
-                "value": {
+                "value": json.dumps({
                     "issuanceType": "ISSUANCE_BY_DEFAULT",
                     "maxCredNum": revocation_registry_definition.value.max_cred_num,
                     "publicKeys": revocation_registry_definition.value.public_keys,
                     "tailsHash": revocation_registry_definition.value.tails_hash,
                     "tailsLocation": revocation_registry_definition.value.tails_location,
-                },
+                }),
+                "issuerId": revocation_registry_definition.cred_def_id.split('/')[0]
+
             }
 
-            ledger = profile.inject(BaseLedger)
-            async with ledger:
-                resp = await ledger.send_revoc_reg_def(
-                    indy_rev_reg_def,
-                    revocation_registry_definition.issuer_id,
-                )
-            seq_no = resp["result"]["txnMetadata"]["seqNo"]
+            abi = json.loads(REVOCATION_REGISTRY_ABI)
+            address = self.web3.to_checksum_address(self.REVOCATION_ADDRESS)
+            contract = self.web3.eth.contract(address=address, abi=abi)
+            Chain_id = self.web3.eth.chain_id
+            nonce = self.web3.eth.get_transaction_count(self.ACCOUNT)
+            LOGGER.debug(f"Creating rev reg: {indy_rev_reg_def}")
+            call_function = contract.functions.createRevocationRegistry(indy_rev_reg_def).build_transaction({"chainId": Chain_id, "from": self.ACCOUNT, "nonce": nonce, "gas": 3000000})
+            
+            tx_receipt = await self.send_transaction_tx(call_function)
+
+            # receipt = contract.functions.createSchema(indy_schema).transact({"from": self.ACCOUNT})
+            LOGGER.debug("Receipt: %s", tx_receipt)
+            # Was it realy created? 
+            result = contract.functions.resolveRevocation(rev_reg_def_id).call()        
+
+            seq_no = self.REVOCATION_ADDRESS
         except LedgerError as err:
             raise AnonCredsRegistrationError() from err
 
@@ -585,8 +639,12 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
             if max_cred_num:
                 return max_cred_num
 
-        rev_reg_def = await ledger.get_revoc_reg_def(rev_reg_def_id)
-        max_cred_num = rev_reg_def["value"]["maxCredNum"]
+        abi = json.loads(REVOCATION_REGISTRY_ABI)
+        address = self.web3.to_checksum_address(self.REVOCATION_ADDRESS)
+        contract = self.web3.eth.contract(address=address, abi=abi)
+        # Was it realy created? 
+        rev_reg_def = contract.functions.resolveRevocation(rev_reg_def_id).call()      
+        max_cred_num = json.loads(rev_reg_def[0][5])['maxCredNum']
 
         if cache:
             await cache.set(cache_key, max_cred_num)
@@ -623,16 +681,22 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         """Fetch the revocation registry delta."""
         ledger_id, ledger = await self._get_ledger(profile, rev_reg_def_id)
 
-        async with ledger:
-            delta, timestamp = await ledger.get_revoc_reg_delta(
-                rev_reg_def_id, timestamp_to=timestamp
+        # async with ledger:
+            # delta, timestamp = await ledger.get_revoc_reg_delta(
+            #     rev_reg_def_id, timestamp_to=timestamp
+            # )
+        abi = json.loads(REVOCATION_REGISTRY_ABI)
+        address = self.web3.to_checksum_address(self.REVOCATION_ADDRESS)
+        contract = self.web3.eth.contract(address=address, abi=abi)
+        delta = contract.functions.resolveEntry(rev_reg_def_id).call()    
+        LOGGER.debug(f"Received delta: {delta}")
+        timestamp = delta[1][2]
+        delta = json.loads(delta[0][2])
+        if delta is None:
+            raise AnonCredsObjectNotFound(
+                f"Revocation list not found for rev reg def: {rev_reg_def_id}",
+                {"ledger_id": ledger_id},
             )
-
-            if delta is None:
-                raise AnonCredsObjectNotFound(
-                    f"Revocation list not found for rev reg def: {rev_reg_def_id}",
-                    {"ledger_id": ledger_id},
-                )
         LOGGER.debug("Retrieved delta: %s", delta)
         return delta, timestamp
 
@@ -640,34 +704,48 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         self, profile: Profile, rev_reg_def_id: str, timestamp: int
     ) -> GetRevListResult:
         """Get the revocation registry list."""
+        # async with ledger:
+        #     max_cred_num = await self._get_or_fetch_rev_reg_def_max_cred_num(
+        #         profile, ledger, rev_reg_def_id
+        #     )
+        #     revocation_list_from_indexes = self._indexes_to_bit_array(
+        #         delta["value"]["revoked"], max_cred_num
+        #     )
+        #     LOGGER.debug(
+        #         "Index list to full state bit array: %s", revocation_list_from_indexes
+        #     )
+        # abi = json.loads(REVOCATION_REGISTRY_ABI)
+        # address = self.web3.to_checksum_address(self.REVOCATION_ADDRESS)
+        # contract = self.web3.eth.contract(address=address, abi=abi)
+        # Chain_id = self.web3.eth.chain_id
+        # nonce = self.web3.eth.get_transaction_count(self.ACCOUNT)        
         _, ledger = await self._get_ledger(profile, rev_reg_def_id)
-
+          # rev_reg_def_value = RevRegDefValue.deserialize(rev_reg_def["value"])
         delta, timestamp = await self.get_revocation_registry_delta(
             profile, rev_reg_def_id, timestamp
         )
-
-        async with ledger:
-            max_cred_num = await self._get_or_fetch_rev_reg_def_max_cred_num(
-                profile, ledger, rev_reg_def_id
-            )
-            revocation_list_from_indexes = self._indexes_to_bit_array(
-                delta["value"]["revoked"], max_cred_num
-            )
-            LOGGER.debug(
-                "Index list to full state bit array: %s", revocation_list_from_indexes
-            )
-            rev_list = RevList(
-                issuer_id=rev_reg_def_id.split(":")[0],
-                rev_reg_def_id=rev_reg_def_id,
-                revocation_list=revocation_list_from_indexes,
-                current_accumulator=delta["value"]["accum"],
-                timestamp=timestamp,
-            )
-            result = GetRevListResult(
-                revocation_list=rev_list,
-                resolution_metadata={},
-                revocation_registry_metadata={},
-            )
+        max_cred_num = await self._get_or_fetch_rev_reg_def_max_cred_num(
+            profile, ledger, rev_reg_def_id
+        )
+        
+        # delta = contract.functions.resolveRevocation(rev_reg_def_id).call()    
+        delta_list = delta["value"]["revoked"] if delta["value"].get("revoked") else []
+        revocation_list_from_indexes = self._indexes_to_bit_array(
+            delta_list, max_cred_num
+        )
+        LOGGER.debug(f"List of indexes {revocation_list_from_indexes}")
+        rev_list = RevList(
+            issuer_id=rev_reg_def_id.split("/")[0],
+            rev_reg_def_id=rev_reg_def_id,
+            revocation_list=revocation_list_from_indexes, # rever isso depois
+            current_accumulator=delta["value"]["accum"],
+            timestamp=timestamp,
+        )
+        result = GetRevListResult(
+            revocation_list=rev_list,
+            resolution_metadata={},
+            revocation_registry_metadata={},
+        )
 
         return result
 
@@ -679,19 +757,36 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         entry: dict,
     ) -> dict:
         """Send a revocation registry entry to the ledger with fixes if needed."""
-        # TODO Handle multitenancy and multi-ledger (like in get cred def)
-        ledger = profile.inject(BaseLedger)
-
         try:
-            async with ledger:
-                rev_entry_res = await ledger.send_revoc_reg_entry(
-                    rev_list.rev_reg_def_id,
-                    rev_reg_def_type,
-                    entry,
-                    rev_list.issuer_id,
-                    write_ledger=True,
-                    endorser_did=None,
-                )
+            # async with ledger:
+                # rev_entry_res = await ledger.send_revoc_reg_entry(
+                #     rev_list.rev_reg_def_id,
+                #     rev_reg_def_type,
+                #     entry,
+                #     rev_list.issuer_id,
+                #     write_ledger=True,
+                #     endorser_did=None,
+                # )
+            abi = json.loads(REVOCATION_REGISTRY_ABI)
+            address = self.web3.to_checksum_address(self.REVOCATION_ADDRESS)
+            contract = self.web3.eth.contract(address=address, abi=abi)
+            Chain_id = self.web3.eth.chain_id
+            nonce = self.web3.eth.get_transaction_count(self.ACCOUNT)
+            rev_entry = {"revDefId": rev_list.rev_reg_def_id,
+                        "regDefType": rev_reg_def_type,
+                        "entry": json.dumps(entry),
+                        "issuerId": rev_list.issuer_id
+                        }
+            call_function = contract.functions.createOrUpdateEntry(
+                rev_entry
+            ).build_transaction({"chainId": Chain_id, "from": self.ACCOUNT, "nonce": nonce, "gas": 3000000})
+            
+            rev_entry_res = await self.send_transaction_tx(call_function)
+            rev_entry_res = contract.functions.resolveEntry(rev_list.rev_reg_def_id).call()      
+            
+            LOGGER.debug("Receipt: %s", rev_entry_res)
+
+            
         except LedgerTransactionError as err:
             if "InvalidClientRequest" in err.roll_up:
                 # ... if the ledger write fails (with "InvalidClientRequest")
@@ -701,13 +796,13 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
                 # In this scenario we try to post a correction
                 LOGGER.warn("Retry ledger update/fix due to error")
                 LOGGER.warn(err)
-                (_, _, res) = await self.fix_ledger_entry(
-                    profile,
-                    rev_list,
-                    True,
-                    ledger.pool.genesis_txns,
-                )
-                rev_entry_res = {"result": res}
+                # (_, _, res) = await self.fix_ledger_entry(
+                #     profile,
+                #     rev_list,
+                #     True,
+                #     ledger.pool.genesis_txns,
+                # )
+                # rev_entry_res = {"result": res}
                 LOGGER.warn("Ledger update/fix applied")
             elif "InvalidClientTaaAcceptanceError" in err.roll_up:
                 # if no write access (with "InvalidClientTaaAcceptanceError")
@@ -725,7 +820,7 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
                     "Ledger update failed due to unknown issue"
                 ) from err
 
-        return rev_entry_res
+        return rev_entry_res[0][0]
 
     async def register_revocation_list(
         self,
@@ -737,7 +832,7 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         """Register a revocation list on the registry."""
         rev_reg_entry = {"ver": "1.0", "value": {"accum": rev_list.current_accumulator}}
 
-        rev_entry_res = await self._revoc_reg_entry_with_fix(
+        await self._revoc_reg_entry_with_fix(
             profile, rev_list, rev_reg_def.type, rev_reg_entry
         )
 
@@ -749,7 +844,7 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
             ),
             registration_metadata={},
             revocation_list_metadata={
-                "seqNo": rev_entry_res["result"]["txnMetadata"]["seqNo"],
+                "seqNo": "Besu",
             },
         )
 
@@ -773,7 +868,7 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
             },
         }
 
-        rev_entry_res = await self._revoc_reg_entry_with_fix(
+        await self._revoc_reg_entry_with_fix(
             profile, curr_list, rev_reg_def.type, rev_reg_entry
         )
 
@@ -785,7 +880,7 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
             ),
             registration_metadata={},
             revocation_list_metadata={
-                "seqNo": rev_entry_res["result"]["txnMetadata"]["seqNo"],
+                "seqNo": "NA",
             },
         )
 

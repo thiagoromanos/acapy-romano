@@ -2,6 +2,7 @@
 
 import abc
 import json
+
 from functools import reduce
 from itertools import chain
 from os import environ
@@ -9,12 +10,15 @@ from typing import Type
 
 import deepmerge
 import yaml
+
 from configargparse import ArgumentParser, Namespace, YAMLConfigFileParser
 
 from ..utils.tracing import trace_event
+
 from .error import ArgsParseError
-from .plugin_settings import PLUGIN_CONFIG_KEY
 from .util import BoundedInt, ByteSize
+
+from .plugin_settings import PLUGIN_CONFIG_KEY
 
 CAT_PROVISION = "general"
 CAT_START = "start"
@@ -619,6 +623,12 @@ class GeneralGroup(ArgumentGroup):
             help="Specifies the profile endpoint for the (public) DID.",
         )
         parser.add_argument(
+            "--read-only-ledger",
+            action="store_true",
+            env_var="ACAPY_READ_ONLY_LEDGER",
+            help="Sets ledger to read-only to prevent updates. Default: false.",
+        )
+        parser.add_argument(
             "--universal-resolver",
             type=str,
             nargs="?",
@@ -684,6 +694,9 @@ class GeneralGroup(ArgumentGroup):
             raise ArgsParseError("-e/--endpoint is required")
         if args.profile_endpoint:
             settings["profile_endpoint"] = args.profile_endpoint
+
+        if args.read_only_ledger:
+            settings["read_only_ledger"] = True
 
         if args.universal_resolver_regex and not args.universal_resolver:
             raise ArgsParseError(
@@ -774,13 +787,13 @@ class RevocationGroup(ArgumentGroup):
         if args.notify_revocation:
             settings["revocation.notify"] = args.notify_revocation
         if args.monitor_revocation_notification:
-            settings["revocation.monitor_notification"] = (
-                args.monitor_revocation_notification
-            )
+            settings[
+                "revocation.monitor_notification"
+            ] = args.monitor_revocation_notification
         if args.anoncreds_legacy_revocation:
-            settings["revocation.anoncreds_legacy_support"] = (
-                args.anoncreds_legacy_revocation
-            )
+            settings[
+                "revocation.anoncreds_legacy_support"
+            ] = args.anoncreds_legacy_revocation
         return settings
 
 
@@ -814,6 +827,16 @@ class LedgerGroup(ArgumentGroup):
             ),
         )
         parser.add_argument(
+            "--revocation-contract-address",
+            type=str,
+            metavar="<account>",
+            dest="revocation_contract_address",
+            env_var="REVOCATION_CONTRACT_ADDRESS",
+            help=(
+                "Specifies the revocation contract address"
+            ),
+        )
+        parser.add_argument(
             "--besu-provider-url",
             type=str,
             metavar="<besu>",
@@ -831,16 +854,6 @@ class LedgerGroup(ArgumentGroup):
             env_var="SCHEMA_CONTRACT_ADDRESS",
             help=(
                 "Specifies the schema contract address"
-            ),
-        )
-        parser.add_argument(
-            "--revocation-contract-address",
-            type=str,
-            metavar="<account>",
-            dest="revocation_contract_address",
-            env_var="REVOCATION_CONTRACT_ADDRESS",
-            help=(
-                "Specifies the revocation contract address"
             ),
         )
         parser.add_argument(
@@ -908,12 +921,6 @@ class LedgerGroup(ArgumentGroup):
             ),
         )
         parser.add_argument(
-            "--read-only-ledger",
-            action="store_true",
-            env_var="ACAPY_READ_ONLY_LEDGER",
-            help="Sets ledger to read-only to prevent updates. Default: false.",
-        )
-        parser.add_argument(
             "--ledger-keepalive",
             default=5,
             type=BoundedInt(min=5),
@@ -968,6 +975,7 @@ class LedgerGroup(ArgumentGroup):
         settings["ledger.credef_contract_address"] = args.credef_contract_address
         settings["ledger.private_account_key"] = args.private_account_key
         settings["ledger.account_address"] = args.account_address
+        settings["ledger.revocation_contract_address"] = args.revocation_contract_address
 
         if args.no_ledger:
             settings["ledger.disabled"] = True
@@ -976,9 +984,6 @@ class LedgerGroup(ArgumentGroup):
             multi_configured = False
             update_pool_name = False
             write_ledger_specified = False
-
-            if args.read_only_ledger:
-                settings["read_only_ledger"] = True
             if args.genesis_url:
                 settings["ledger.genesis_url"] = args.genesis_url
                 single_configured = True
@@ -1007,7 +1012,7 @@ class LedgerGroup(ArgumentGroup):
                             txn_config["pool_name"] = txn_config["id"]
                         update_pool_name = True
                         ledger_config_list.append(txn_config)
-                    if not write_ledger_specified and not args.read_only_ledger:
+                    if not write_ledger_specified:
                         raise ArgsParseError(
                             "No write ledger genesis provided in multi-ledger config"
                         )
@@ -1031,6 +1036,7 @@ class LedgerGroup(ArgumentGroup):
             if args.accept_taa:
                 settings["ledger.taa_acceptance_mechanism"] = args.accept_taa[0]
                 settings["ledger.taa_acceptance_version"] = args.accept_taa[1]
+                
 
         return settings
 
@@ -1233,19 +1239,6 @@ class ProtocolGroup(ArgumentGroup):
                 "using unencrypted rather than encrypted tags"
             ),
         )
-        parser.add_argument(
-            "--emit-did-peer-2",
-            action="store_true",
-            env_var="ACAPY_EMIT_DID_PEER_2",
-            help=("Emit did:peer:2 DIDs in DID Exchange Protocol"),
-        )
-
-        parser.add_argument(
-            "--emit-did-peer-4",
-            action="store_true",
-            env_var="ACAPY_EMIT_DID_PEER_4",
-            help=("Emit did:peer:4 DIDs in DID Exchange Protocol"),
-        )
 
     def get_settings(self, args: Namespace) -> dict:
         """Get protocol settings."""
@@ -1312,12 +1305,6 @@ class ProtocolGroup(ArgumentGroup):
         if args.exch_use_unencrypted_tags:
             settings["exch_use_unencrypted_tags"] = True
             environ["EXCH_UNENCRYPTED_TAGS"] = "True"
-
-        if args.emit_did_peer_2:
-            settings["emit_did_peer_2"] = True
-        if args.emit_did_peer_4:
-            settings["emit_did_peer_4"] = True
-
         return settings
 
 
@@ -1767,13 +1754,13 @@ class WalletGroup(ArgumentGroup):
             settings["wallet.replace_public_did"] = True
         if args.recreate_wallet:
             settings["wallet.recreate"] = True
-        # check required settings for persistent wallets
+        # check required settings for 'indy' wallets
         if settings["wallet.type"] in ["indy", "askar", "askar-anoncreds"]:
             # requires name, key
             if not args.wallet_name or not args.wallet_key:
                 raise ArgsParseError(
                     "Parameters --wallet-name and --wallet-key must be provided "
-                    "for persistent wallets"
+                    "for indy wallets"
                 )
             # postgres storage requires additional configuration
             if (
@@ -1885,9 +1872,9 @@ class MultitenantGroup(ArgumentGroup):
                         )
 
                     if multitenancy_config.get("key_derivation_method"):
-                        settings["multitenant.key_derivation_method"] = (
-                            multitenancy_config.get("key_derivation_method")
-                        )
+                        settings[
+                            "multitenant.key_derivation_method"
+                        ] = multitenancy_config.get("key_derivation_method")
 
                 else:
                     for value_str in args.multitenancy_config:
@@ -2035,9 +2022,9 @@ class EndorsementGroup(ArgumentGroup):
 
         if args.endorser_endorse_with_did:
             if settings["endorser.endorser"]:
-                settings["endorser.endorser_endorse_with_did"] = (
-                    args.endorser_endorse_with_did
-                )
+                settings[
+                    "endorser.endorser_endorse_with_did"
+                ] = args.endorser_endorse_with_did
             else:
                 raise ArgsParseError(
                     "Parameter --endorser-endorse-with-did should only be set for "

@@ -64,7 +64,7 @@ class PeerDID3Resolver(BaseDIDResolver):
         return doc
 
     async def create_and_store(self, profile: Profile, peer2: str):
-        """Injest did:peer:2 create did:peer:3 and store document."""
+        """Inject did:peer:2 create did:peer:3 and store document."""
         if not PEER2_PATTERN.match(peer2):
             raise ValueError("did:peer:2 expected")
 
@@ -89,8 +89,12 @@ class PeerDID3Resolver(BaseDIDResolver):
         if not their_did and not my_did:
             return
         dids = [
-            *(did for did in (their_did, my_did) if PEER3_PATTERN.match(did)),
-            *(peer2to3(did) for did in (their_did, my_did) if PEER2_PATTERN.match(did)),
+            *(did for did in (their_did, my_did) if did and PEER3_PATTERN.match(did)),
+            *(
+                peer2to3(did)
+                for did in (their_did, my_did)
+                if did and PEER2_PATTERN.match(did)
+            ),
         ]
         if dids:
             LOGGER.debug(

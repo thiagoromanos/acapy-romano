@@ -34,6 +34,7 @@ from ..core.error import BaseError
 from ..core.event_bus import Event, EventBus
 from ..core.profile import Profile, ProfileSession
 from ..tails.base import BaseTailsServer
+from .error_messages import ANONCREDS_PROFILE_REQUIRED_MSG
 from .events import RevListFinishedEvent, RevRegDefFinishedEvent
 from .issuer import (
     CATEGORY_CRED_DEF,
@@ -95,7 +96,7 @@ class AnonCredsRevocation:
     def profile(self) -> AskarAnoncredsProfile:
         """Accessor for the profile instance."""
         if not isinstance(self._profile, AskarAnoncredsProfile):
-            raise ValueError("AnonCreds interface requires AskarAnoncreds")
+            raise ValueError(ANONCREDS_PROFILE_REQUIRED_MSG)
 
         return self._profile
 
@@ -1380,9 +1381,9 @@ class AnonCredsRevocation:
         )
 
     async def set_tails_file_public_uri(self, rev_reg_id, tails_public_uri):
-        """Update Revocation Registy tails file public uri."""
+        """Update Revocation Registry tails file public uri."""
         pass
 
     async def set_rev_reg_state(self, rev_reg_id, state):
-        """Update Revocation Registy state."""
+        """Update Revocation Registry state."""
         pass

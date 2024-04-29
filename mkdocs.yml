@@ -89,6 +89,7 @@ nav:
     - The Admin API: features/AdminAPI.md
     - ACA-Py Plugins: features/PlugIns.md
     - Multitenant ACA-Py: features/Multitenancy.md
+    - Qualified DIDs: features/QualifiedDIDs.md
     - DID Methods: features/DIDMethods.md
     - DID Resolution: features/DIDResolution.md
     - Publishing AnonCreds Objects To Other Ledgers/Verifiable Data Registries: features/AnonCredsMethods.md
@@ -109,6 +110,7 @@ nav:
     - Using W3C JSON-LD Credentials: demo/AliceWantsAJsonCredential.md
     - DIY -- ACME Controller Workshop: demo/AcmeDemoWorkshop.md
     - Aries Using Postman Demo: demo/AriesPostmanDemo.md
+    - Reusing a Connection Between Agents: demo/ReusingAConnection.md
 - Getting Started:
     - Becoming an Indy/Aries Developer: gettingStarted/README.md
     - Hyperledger Indy Basics: gettingStarted/IndyBasics.md

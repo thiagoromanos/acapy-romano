@@ -209,7 +209,7 @@ class PluginRegistry:
             else:
                 await self.load_protocols(context, plugin)
 
-        # register event handlers for each protocol, if providedf
+        # register event handlers for each protocol, if provided
         self.register_protocol_events(context)
 
     async def load_protocol_version(
@@ -226,9 +226,7 @@ class PluginRegistry:
                 mod.MESSAGE_TYPES, version_definition=version_definition
             )
         if hasattr(mod, "CONTROLLERS"):
-            protocol_registry.register_controllers(
-                mod.CONTROLLERS, version_definition=version_definition
-            )
+            protocol_registry.register_controllers(mod.CONTROLLERS)
             goal_code_registry.register_controllers(mod.CONTROLLERS)
 
     async def load_protocols(self, context: InjectionContext, plugin: ModuleType):

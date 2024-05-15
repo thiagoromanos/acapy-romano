@@ -827,16 +827,6 @@ class LedgerGroup(ArgumentGroup):
             ),
         )
         parser.add_argument(
-            "--revocation-contract-address",
-            type=str,
-            metavar="<account>",
-            dest="revocation_contract_address",
-            env_var="REVOCATION_CONTRACT_ADDRESS",
-            help=(
-                "Specifies the revocation contract address"
-            ),
-        )
-        parser.add_argument(
             "--besu-provider-url",
             type=str,
             metavar="<besu>",

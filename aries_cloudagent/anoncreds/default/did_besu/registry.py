@@ -1,4 +1,5 @@
 """Legacy Indy Registry."""
+
 import json
 import logging
 import re
@@ -6,6 +7,9 @@ from asyncio import shield
 from typing import List, Optional, Pattern, Sequence, Tuple
 
 from base58 import alphabet
+from web3 import Web3
+from web3.middleware import geth_poa_middleware
+from web3.types import TxReceipt
 
 from ....cache.base import BaseCache
 from ....config.injection_context import InjectionContext
@@ -59,18 +63,12 @@ from ...models.anoncreds_schema import (
     SchemaState,
 )
 
-from web3 import Web3
-from web3.middleware import geth_poa_middleware
-from web3.types import (
-    TxReceipt
-)
-
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_CRED_DEF_TAG = "default"
 DEFAULT_SIGNATURE_TYPE = "CL"
 
-# Ganache 
+# Ganache
 DID_REGISTRY_ADDRESS = ""
 SCHEMA_REGISTRY_ADDRESS = "0x32Cf1f3a98aeAF57b88b3740875D19912A522c1A"
 CRED_DEF_REGISTRY_ADDRESS = "0xD3aA556287Afe63102e5797BFDDd2A1E8DbB3eA5"
@@ -98,6 +96,7 @@ HTTP_PROVIDER = "http://10.233.48.109:8545/"
 ACCOUNT = "0xFE3B557E8Fb62b89F4916B721be55cEb828dBd73"
 PKEY = "0x8f2a55949038a9610f50fb23b5883af3b4ecb3c3bb792cbcefbd1542c692be63"
 
+
 class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
     """DIDBesuRegistry."""
 
@@ -110,8 +109,10 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         """
         B58 = alphabet if isinstance(alphabet, str) else alphabet.decode("ascii")
         INDY_DID = rf"^(did:indy2)?:.+:[{B58}]{{21,22}}$"
-        INDY_SCHEMA_ID = rf"^(did:indy2)?:.+:[{B58}]{{21,22}}/anoncreds/v0/SCHEMA/.+/[0-9.]+$"
-        # schema 
+        INDY_SCHEMA_ID = (
+            rf"^(did:indy2)?:.+:[{B58}]{{21,22}}/anoncreds/v0/SCHEMA/.+/[0-9.]+$"
+        )
+        # schema
         # ["did:indy2:testnet:WedHLJdFf4yMaDXdhJcL97/anoncreds/v0/SCHEMA/BasicIdentity/1.0.0","did:indy2:testnet:WedHLJdFf4yMaDXdhJcL97", "BasicIdentity","1.0.0", ["First Name","Last Name"]]
         # credef
         # ["did:indy2:testnet:WedHLJdFf4yMaDXdhJcL97/anoncreds/v0/CLAIM_DEF/did:indy2:testnet:WedHLJdFf4yMaDXdhJcL97/anoncreds/v0/SCHEMA/BasicIdentity/1.0.0/BasicIdentity","did:indy2:testnet:WedHLJdFf4yMaDXdhJcL97", "did:indy2:testnet:WedHLJdFf4yMaDXdhJcL97/anoncreds/v0/SCHEMA/BasicIdentity/1.0.0", "CL", "BasicIdentity", "<keys>"]
@@ -125,11 +126,11 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         INDY_REV_REG_DEF_ID = (
             rf"^((did:indy2)?:.+:[{B58}]{{21,22}})"  # issuer DID
             f"/anoncreds/v0/REV_REG/"  # cred def id marker
-           rf"((did:indy2)?:.+:[{B58}]{{21,22}})"  # issuer DID
+            rf"((did:indy2)?:.+:[{B58}]{{21,22}})"  # issuer DID
             f"/anoncreds/v0/CLAIM_DEF/"  # cred def id marker
             # f":CL"  # sig alg
             rf"((did:indy2)?:.+:[{B58}]{{21,22}}/anoncreds/v0/SCHEMA/.+/[0-9.]+)"  # schema txn / id
-            f"/(.+)?$"  # tag     
+            f"/(.+)?$"  # tag
         )
         self._supported_identifiers_regex = re.compile(
             rf"{INDY_DID}|{INDY_SCHEMA_ID}|{INDY_CRED_DEF_ID}|{INDY_REV_REG_DEF_ID}"
@@ -152,12 +153,18 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
 
     async def setup(self, context: InjectionContext):
         """Setup."""
-        self.ACCOUNT = context.settings.get('ledger.account_address')
-        self.PKEY = context.settings.get('ledger.private_account_key')
-        self.HTTP_PROVIDER = context.settings.get('ledger.besu_provider_url')
-        self.SCHEMA_REGISTRY_ADDRESS = context.settings.get('ledger.schema_contract_address')
-        self.CRED_DEF_REGISTRY_ADDRESS = context.settings.get('ledger.credef_contract_address')
-        self.REVOCATION_ADDRESS = context.settings.get('ledger.revocation_contract_address')
+        self.ACCOUNT = context.settings.get("ledger.account_address")
+        self.PKEY = context.settings.get("ledger.private_account_key")
+        self.HTTP_PROVIDER = context.settings.get("ledger.besu_provider_url")
+        self.SCHEMA_REGISTRY_ADDRESS = context.settings.get(
+            "ledger.schema_contract_address"
+        )
+        self.CRED_DEF_REGISTRY_ADDRESS = context.settings.get(
+            "ledger.credef_contract_address"
+        )
+        self.REVOCATION_ADDRESS = context.settings.get(
+            "ledger.revocation_contract_address"
+        )
 
         self.web3 = Web3(Web3.HTTPProvider(self.HTTP_PROVIDER))
         self.web3.middleware_onion.inject(geth_poa_middleware, layer=0)
@@ -199,69 +206,71 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         )
 
     async def get_schema(self, profile: Profile, schema_id: str) -> GetSchemaResult:
-        """Get a schema from the registry."""   
+        """Get a schema from the registry."""
 
-        # if not ledger:
-        #     reason = "No ledger available"
-        #     if not profile.settings.get_value("wallet.type"):
-        #         reason += ": missing wallet-type?"
-        #     raise AnonCredsResolutionError(reason)
-        abi = json.loads(SCHEMA_REGISTRY_ABI)
-        address = self.web3.to_checksum_address(self.SCHEMA_REGISTRY_ADDRESS)
-        contract = self.web3.eth.contract(address=address, abi=abi)
-        
-        try:
-            schema = contract.functions.resolveSchema(schema_id).call()        
-            if schema is None:
-                raise AnonCredsObjectNotFound(
-                    f"Schema not found: {schema_id}",
-                    {"ledger_id": "besu"},
+        multitenant_mgr = profile.inject_or(BaseMultitenantManager)
+        if multitenant_mgr:
+            ledger_exec_inst = IndyLedgerRequestsExecutor(profile)
+        else:
+            ledger_exec_inst = profile.inject(IndyLedgerRequestsExecutor)
+        ledger_id, ledger = await ledger_exec_inst.get_ledger_for_identifier(
+            schema_id,
+            txn_record_type=GET_SCHEMA,
+        )
+
+        if not ledger:
+            reason = "No ledger available"
+            if not profile.settings.get_value("wallet.type"):
+                reason += ": missing wallet-type?"
+            raise AnonCredsResolutionError(reason)
+
+        async with ledger:
+            try:
+                schema = await ledger.get_schema(schema_id)
+                if schema is None:
+                    raise AnonCredsObjectNotFound(
+                        f"Schema not found: {schema_id}",
+                        {"ledger_id": ledger_id},
+                    )
+
+                anoncreds_schema = AnonCredsSchema(
+                    issuer_id=schema["issuerId"],
+                    attr_names=schema["attrNames"],
+                    name=schema["name"],
+                    version=schema["version"],
                 )
-            schema = schema[0]
-            LOGGER.debug(f"SCHEMA: {schema}")
-            anonscreds_schema = AnonCredsSchema(
-                issuer_id=schema[1],
-                attr_names=schema[4],
-                name=schema[2],
-                version=schema[3],
-            )
-            result = GetSchemaResult(
-                schema=anonscreds_schema,
-                schema_id=schema[0],
-                resolution_metadata={"ledger_id": "besu"},
-                schema_metadata={"seqNo": "Besu"},
-            )            
-        except LedgerError as err:
-            raise AnonCredsResolutionError("Failed to retrieve schema") from err
-        return result
-    
-    async def register_revocation(
-            self, 
-            revocation_id: str,
-            issuer_id: str,
-            credDef_id: str
+                result = GetSchemaResult(
+                    schema=anoncreds_schema,
+                    schema_id=schema["id"],
+                    resolution_metadata={"ledger_id": ledger_id},
+                    schema_metadata={"seqNo": schema["seqNo"]},
+                )
+            except LedgerError as err:
+                raise AnonCredsResolutionError("Failed to retrieve schema") from err
 
+        return result
+
+    async def register_revocation(
+        self, revocation_id: str, issuer_id: str, credDef_id: str
     ) -> TxReceipt:
         """Register a revocation on the registry. (BETA)"""
         LOGGER.debug(f"Registering revocation: {revocation_id}")
-        rev_json = {
-            "id": revocation_id, 
-            "issuerId": issuer_id,
-            "credDefId": credDef_id
-        }
+        rev_json = {"id": revocation_id, "issuerId": issuer_id, "credDefId": credDef_id}
         abi = json.loads(REVOCATION_REGISTRY_ABI)
         address = self.web3.to_checksum_address(self.REVOCATION_ADDRESS)
         contract = self.web3.eth.contract(address=address, abi=abi)
         Chain_id = self.web3.eth.chain_id
         nonce = self.web3.eth.get_transaction_count(self.ACCOUNT)
-        call_function = contract.functions.createRevocation(rev_json).build_transaction({"chainId": Chain_id, "from": self.ACCOUNT, "nonce": nonce, "gas": 3000000})
-        
+        call_function = contract.functions.createRevocation(rev_json).build_transaction(
+            {"chainId": Chain_id, "from": self.ACCOUNT, "nonce": nonce, "gas": 3000000}
+        )
+
         tx_receipt = await self.send_transaction_tx(call_function)
 
         # receipt = contract.functions.createSchema(indy_schema).transact({"from": self.ACCOUNT})
         LOGGER.debug("Receipt: %s", tx_receipt)
-        # Was it realy created? 
-        result = contract.functions.resolveRevocation(revocation_id).call()        
+        # Was it realy created?
+        result = contract.functions.resolveRevocation(revocation_id).call()
 
     async def register_schema(
         self,
@@ -274,13 +283,9 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         schema_id = self.make_schema_id(schema)
 
         # Assume endorser role on the network, no option for 3rd-party endorser
-        # ledger = profile.inject_or(BaseLedger)
-        # if not ledger:
-        #     reason = "No ledger available"
-        #     if not profile.settings.get_value("wallet.type"):
-        #         # TODO is this warning necessary?
-        #         reason += ": missing wallet-type?"
-        #     raise AnonCredsRegistrationError(reason)
+        ledger = profile.inject_or(BaseLedger)
+        if not ledger:
+            raise AnonCredsRegistrationError("No ledger available")
 
         # Translate schema into format expected by Indy
         LOGGER.debug("Registering schema: %s", schema_id)
@@ -289,46 +294,24 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
             "issuerId": schema.issuer_id,
             "name": schema.name,
             "version": schema.version,
-            "attrNames": schema.attr_names
+            "attrNames": schema.attr_names,
             # "seqNo": None,
         }
-        # [[],"did:indy2:testnet:WedHLJdFf4yMaDXdhJcL97",[],[["did:indy2:testnet:WedHLJdFf4yMaDXdhJcL97#KEY-1","Ed25519VerificationKey2018", "did:indy2:testnet:N22WedHLJdFf4yMaDXdhJcL97","HAFkhqbPbor781QCMfNvr6oQTTixK9U7gZmDV7pszTHp",""]],[["did:indy2:testnet:WedHLJdFf4yMaDXdhJcL97#KEY-1",["","","","",""]]],[],[],[],[],[],[]]
-        # credef
-        # ["did:indy2:mainnet:WedHLJdFf4yMaDXdhJcL97/anoncreds/v0/CLAIM_DEF/did:indy2:mainnet:WedHLJdFf4yMaDXdhJcL97/anoncreds/v0/SCHEMA/BasicIdentity/1.0.0/BasicIdentity","did:indy2:mainnet:WedHLJdFf4yMaDXdhJcL97","did:indy2:mainnet:WedHLJdFf4yMaDXdhJcL97/anoncreds/v0/SCHEMA/BasicIdentity/1.0.0","CL","BasicIdentity","[ \"n\": \"779...397\", \"rctxt\": \"774...977\", \"s\": \"750..893\", \"z\": \"632...005\" ]"]
-        LOGGER.debug("schema value: %s", indy_schema)
-        abi = json.loads(SCHEMA_REGISTRY_ABI)
-        address = self.web3.to_checksum_address(self.SCHEMA_REGISTRY_ADDRESS)
-        contract = self.web3.eth.contract(address=address, abi=abi)
-        Chain_id = self.web3.eth.chain_id
-        nonce = self.web3.eth.get_transaction_count(self.ACCOUNT)
-        call_function = contract.functions.createSchema(indy_schema).build_transaction({"chainId": Chain_id, "from": self.ACCOUNT, "nonce": nonce, "gas": 3000000})
-        
-        tx_receipt = await self.send_transaction_tx(call_function)
 
-        # receipt = contract.functions.createSchema(indy_schema).transact({"from": self.ACCOUNT})
-        LOGGER.debug("Receipt: %s", tx_receipt)
-        # Was it realy created? 
-        result = contract.functions.resolveSchema(schema_id).call()        
-        if not len(result):
-            raise AnonCredsRegistrationError("Failed to register schema")
-        LOGGER.debug(f"Result >>> { result[0]}")        
-        # TODO: create a besu_vdr ledger
-        # async with ledger:
-        #     try:
-        #         seq_no = await shield(
-        #             ledger.send_schema_anoncreds(schema_id, indy_schema)
-        #         )
-        #     except LedgerObjectAlreadyExistsError as err:
-        #         indy_schema = err.obj
-        #         schema = AnonCredsSchema(
-        #             name=indy_schema["name"],
-        #             version=indy_schema["version"],
-        #             attr_names=indy_schema["attrNames"],
-        #             issuer_id=indy_schema["id"].split("/")[0],
-        #         )
-        #         raise AnonCredsSchemaAlreadyExists(err.message, err.obj_id, schema)
-        #     except (AnonCredsIssuerError, LedgerError) as err:
-        #         raise AnonCredsRegistrationError("Failed to register schema") from err
+        async with ledger:
+            try:
+                await shield(
+                    ledger.send_schema_anoncreds(
+                        schema_id,
+                        indy_schema,
+                        write_ledger=True,
+                        endorser_did=None,
+                    )
+                )
+            except LedgerObjectAlreadyExistsError as err:
+                raise AnonCredsSchemaAlreadyExists(err.message, err.obj_id, schema)
+            except (AnonCredsIssuerError, LedgerError) as err:
+                raise AnonCredsRegistrationError("Failed to register schema") from err
 
         return SchemaResult(
             job_id=None,
@@ -338,76 +321,54 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
                 schema=schema,
             ),
             registration_metadata={},
-            schema_metadata={"tx_hash": None}#"seqNo": seq_no},
+            schema_metadata={"tx_hash": None},  # "seqNo": seq_no},
         )
-    
-    async def send_transaction_tx(
-       self, 
-       call_function     
-    ) -> TxReceipt:
-           # Sign transaction
-        signed_tx = self.web3.eth.account.sign_transaction(call_function, private_key=self.PKEY)
 
-        # Send transaction
-        LOGGER.debug("Transaction: %s", signed_tx.rawTransaction)
-        send_tx = self.web3.eth.send_raw_transaction(signed_tx.rawTransaction)
-
-        # Wait for transaction receipt
-        tx_receipt = self.web3.eth.wait_for_transaction_receipt(send_tx)
-
-        return tx_receipt
-    
     async def get_credential_definition(
         self, profile: Profile, cred_def_id: str
     ) -> GetCredDefResult:
         """Get a credential definition from the registry."""
 
-        # async with profile.session() as session:
-        #     multitenant_mgr = session.inject_or(BaseMultitenantManager)
-        #     if multitenant_mgr:
-        #         ledger_exec_inst = IndyLedgerRequestsExecutor(profile)
-        #     else:
-        #         ledger_exec_inst = session.inject(IndyLedgerRequestsExecutor)
+        async with profile.session() as session:
+            multitenant_mgr = session.inject_or(BaseMultitenantManager)
+            if multitenant_mgr:
+                ledger_exec_inst = IndyLedgerRequestsExecutor(profile)
+            else:
+                ledger_exec_inst = session.inject(IndyLedgerRequestsExecutor)
 
-        # ledger_id, ledger = await ledger_exec_inst.get_ledger_for_identifier(
-        #     cred_def_id,
-        #     txn_record_type=GET_CRED_DEF,
-        # )
-        # if not ledger:
-        #     reason = "No ledger available"
-        #     if not profile.settings.get_value("wallet.type"):
-        #         reason += ": missing wallet-type?"
-        #     raise AnonCredsResolutionError(reason)
+        ledger_id, ledger = await ledger_exec_inst.get_ledger_for_identifier(
+            cred_def_id,
+            txn_record_type=GET_CRED_DEF,
+        )
+        if not ledger:
+            reason = "No ledger available"
+            if not profile.settings.get_value("wallet.type"):
+                reason += ": missing wallet-type?"
+            raise AnonCredsResolutionError(reason)
 
-        # async with ledger:
-        abi = json.loads(CRED_DEF_REGISTRY_ABI)
-        address = self.web3.to_checksum_address(self.CRED_DEF_REGISTRY_ADDRESS)
-        contract = self.web3.eth.contract(address=address, abi=abi)
-        
-        cred_def = contract.functions.resolveCredentialDefinition(cred_def_id).call()
+        async with ledger:
+            cred_def = await ledger.get_credential_definition(cred_def_id)
 
-        if not len(cred_def):
-            raise AnonCredsObjectNotFound(
-                f"Credential definition not found: {cred_def_id}",
-                {"ledger_id": "Besu"},
+            if cred_def is None:
+                raise AnonCredsObjectNotFound(
+                    f"Credential definition not found: {cred_def_id}",
+                    {"ledger_id": ledger_id},
+                )
+
+            cred_def_value = CredDefValue.deserialize(cred_def["value"])
+            anoncreds_credential_definition = CredDef(
+                issuer_id=cred_def["issuerId"],
+                schema_id=cred_def["schemaId"],
+                type=cred_def["type"],
+                tag=cred_def["tag"],
+                value=cred_def_value,
             )
-        
-        cred_def = cred_def[0]
-        LOGGER.debug(f"Result {cred_def}")
-        cred_def_value = CredDefValue.deserialize(cred_def[5].replace("\'","\""))
-        anoncreds_credential_definition = CredDef(
-            issuer_id=cred_def[1],
-            schema_id=cred_def[2],
-            type=cred_def[3],
-            tag=cred_def[4],
-            value=cred_def_value,
-        )
-        anoncreds_registry_get_credential_definition = GetCredDefResult(
-            credential_definition=anoncreds_credential_definition,
-            credential_definition_id=cred_def[0],
-            resolution_metadata={},
-            credential_definition_metadata={},
-        )
+            anoncreds_registry_get_credential_definition = GetCredDefResult(
+                credential_definition=anoncreds_credential_definition,
+                credential_definition_id=cred_def["id"],
+                resolution_metadata={},
+                credential_definition_metadata={},
+            )
         return anoncreds_registry_get_credential_definition
 
     async def register_credential_definition(
@@ -421,12 +382,12 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
 
         cred_def_id = self.make_cred_def_id(schema, credential_definition)
 
-        # ledger = profile.inject_or(BaseLedger)
-        # if not ledger:
-        #     reason = "No ledger available"
-        #     if not profile.settings.get_value("wallet.type"):
-        #         reason += ": missing wallet-type?"
-        #     raise AnonCredsRegistrationError(reason)
+        ledger = profile.inject_or(BaseLedger)
+        if not ledger:
+            reason = "No ledger available"
+            if not profile.settings.get_value("wallet.type"):
+                reason += ": missing wallet-type?"
+            raise AnonCredsRegistrationError(reason)
 
         # Check if in wallet but not on ledger
         issuer = AnonCredsIssuer(profile)
@@ -443,8 +404,8 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         LOGGER.debug("Registering credential definition: %s", cred_def_id)
         indy_cred_def = {
             "id": cred_def_id,
-            "issuerId": schema.schema_id.split('/')[0],
-            "schemaId": schema.schema_id,            
+            "issuerId": cred_def_id.split("/")[0],
+            "schemaId": schema.schema_id,
             "credDefType": credential_definition.type,
             "tag": credential_definition.tag,
             "value": json.dumps(credential_definition.value.serialize()),
@@ -452,20 +413,62 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         }
         LOGGER.debug("Cred def value: %s", indy_cred_def)
 
+        async with ledger:
+            try:
+                result = await shield(
+                    ledger.send_credential_definition_anoncreds(
+                        credential_definition.schema_id,
+                        cred_def_id,
+                        indy_cred_def,
+                        write_ledger=True,
+                        endorser_did=None,
+                    )
+                )
+            except LedgerObjectAlreadyExistsError as err:
+                if await issuer.credential_definition_in_wallet(cred_def_id):
+                    raise AnonCredsObjectAlreadyExists(
+                        f"Credential definition with id {cred_def_id} "
+                        "already exists in wallet and on ledger.",
+                        cred_def_id,
+                    ) from err
+                else:
+                    raise AnonCredsObjectAlreadyExists(
+                        f"Credential definition {cred_def_id} is on "
+                        f"ledger but not in wallet {profile.name}",
+                        cred_def_id,
+                    ) from err
+
+            return CredDefResult(
+                job_id=None,
+                credential_definition_state=CredDefState(
+                    state=CredDefState.STATE_FINISHED,
+                    credential_definition_id=cred_def_id,
+                    credential_definition=credential_definition,
+                ),
+                registration_metadata={},
+                credential_definition_metadata={
+                    "issuerId": "",
+                    "seqNo": "besu",
+                    **(options or {}),
+                },
+            )
+
         abi = json.loads(CRED_DEF_REGISTRY_ABI)
         address = self.web3.to_checksum_address(self.CRED_DEF_REGISTRY_ADDRESS)
         contract = self.web3.eth.contract(address=address, abi=abi)
         Chain_id = self.web3.eth.chain_id
         nonce = self.web3.eth.get_transaction_count(self.ACCOUNT)
         LOGGER.debug(">>> : %s %s %s ", Chain_id, nonce, self.ACCOUNT)
-        call_function = contract.functions.createCredentialDefinition(indy_cred_def).build_transaction({"chainId": Chain_id, "from": self.ACCOUNT, "nonce": nonce})
+        call_function = contract.functions.createCredentialDefinition(
+            indy_cred_def
+        ).build_transaction({"chainId": Chain_id, "from": self.ACCOUNT, "nonce": nonce})
         tx_receipt = await self.send_transaction_tx(call_function)
         # receipt = contract.functions.createCredentialDefinition(indy_cred_def).transact({"from": self.ACCOUNT})
         LOGGER.debug("Receipt: %s", tx_receipt)
-        result = contract.functions.resolveCredentialDefinition(cred_def_id).call()        
+        result = contract.functions.resolveCredentialDefinition(cred_def_id).call()
         if not len(result):
             raise AnonCredsRegistrationError("Failed to register credef")
-        LOGGER.debug(f"Result >>> { result[0]}")      
+        LOGGER.debug(f"Result >>> { result[0]}")
         # try:
         #     # async with ledger:
         #     seq_no = ledger.send_credential_definition_anoncreds(
@@ -502,66 +505,60 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
                 credential_definition=credential_definition,
             ),
             registration_metadata={},
-            credential_definition_metadata={"issuerId": "", "seqNo": "besu", **(options or {})},
+            credential_definition_metadata={
+                "issuerId": "",
+                "seqNo": "besu",
+                **(options or {}),
+            },
         )
 
     async def get_revocation_registry_definition(
         self, profile: Profile, rev_reg_def_id: str
     ) -> GetRevRegDefResult:
         """Get a revocation registry definition from the registry."""
-        # async with profile.session() as session:
-        #     multitenant_mgr = session.inject_or(BaseMultitenantManager)
-        #     if multitenant_mgr:
-        #         ledger_exec_inst = IndyLedgerRequestsExecutor(profile)
-        #     else:
-        #         ledger_exec_inst = session.inject(IndyLedgerRequestsExecutor)
+        async with profile.session() as session:
+            multitenant_mgr = session.inject_or(BaseMultitenantManager)
+            if multitenant_mgr:
+                ledger_exec_inst = IndyLedgerRequestsExecutor(profile)
+            else:
+                ledger_exec_inst = session.inject(IndyLedgerRequestsExecutor)
 
-        # ledger_id, ledger = await ledger_exec_inst.get_ledger_for_identifier(
-        #     rev_reg_def_id,
-        #     txn_record_type=GET_CRED_DEF,
-        # )
-        # if not ledger:
-        #     reason = "No ledger available"
-        #     if not profile.settings.get_value("wallet.type"):
-        #         reason += ": missing wallet-type?"
-        #     raise AnonCredsResolutionError(reason)
+        ledger_id, ledger = await ledger_exec_inst.get_ledger_for_identifier(
+            rev_reg_def_id,
+            txn_record_type=GET_CRED_DEF,
+        )
+        if not ledger:
+            reason = "No ledger available"
+            if not profile.settings.get_value("wallet.type"):
+                reason += ": missing wallet-type?"
+            raise AnonCredsResolutionError(reason)
 
-        # async with ledger:
-        #     rev_reg_def = await ledger.get_revoc_reg_def(rev_reg_def_id)
+        async with ledger:
+            rev_reg_def = await ledger.get_revoc_reg_def(rev_reg_def_id)
 
-        #     if rev_reg_def is None:
-        #         raise AnonCredsObjectNotFound(
-        #             f"Revocation registry definition not found: {rev_reg_def_id}",
-        #             {"ledger_id": ledger_id},
-        #         )
+            if rev_reg_def is None:
+                raise AnonCredsObjectNotFound(
+                    f"Revocation registry definition not found: {rev_reg_def_id}",
+                    {"ledger_id": ledger_id},
+                )
 
-        #     LOGGER.debug("Retrieved revocation registry definition: %s", rev_reg_def)
-        abi = json.loads(REVOCATION_REGISTRY_ABI)
-        address = self.web3.to_checksum_address(self.REVOCATION_ADDRESS)
-        contract = self.web3.eth.contract(address=address, abi=abi)
-        Chain_id = self.web3.eth.chain_id
-        nonce = self.web3.eth.get_transaction_count(self.ACCOUNT)
-        result = contract.functions.resolveRevocation(rev_reg_def_id).call()  
-        LOGGER.debug(f"Receive rev_reg {result}")
-        if len(result):         
-            rev_reg_def_value = RevRegDefValue.deserialize(json.loads(result[0][5]))
-            issuer = rev_reg_def_id.split('/')[0]
-            cred_def_id = issuer+rev_reg_def_id.split(issuer)[-1].split('/CL_ACCUM')[0]
+            LOGGER.debug("Retrieved revocation registry definition: %s", rev_reg_def)
+            rev_reg_def_value = RevRegDefValue.deserialize(rev_reg_def["value"])
             anoncreds_rev_reg_def = RevRegDef(
-                issuer_id=issuer,
-                cred_def_id=cred_def_id,
-                type=result[0][2],
+                issuer_id=rev_reg_def["issuerId"],
+                cred_def_id=rev_reg_def["credDefId"],
+                type=rev_reg_def["revocDefType"],
                 value=rev_reg_def_value,
-                tag=cred_def_id.split('/')[-1],
+                tag=rev_reg_def["tag"],
             )
             result = GetRevRegDefResult(
                 revocation_registry=anoncreds_rev_reg_def,
-                revocation_registry_id=rev_reg_def_id,
+                revocation_registry_id=rev_reg_def["id"],
                 resolution_metadata={},
-                revocation_registry_metadata={}
+                revocation_registry_metadata={},
             )
 
-            return result
+        return result
 
     async def register_revocation_registry_definition(
         self,
@@ -581,15 +578,16 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
                 "revocDefType": revocation_registry_definition.type,
                 "credDefId": revocation_registry_definition.cred_def_id,
                 "tag": revocation_registry_definition.tag,
-                "value": json.dumps({
-                    "issuanceType": "ISSUANCE_BY_DEFAULT",
-                    "maxCredNum": revocation_registry_definition.value.max_cred_num,
-                    "publicKeys": revocation_registry_definition.value.public_keys,
-                    "tailsHash": revocation_registry_definition.value.tails_hash,
-                    "tailsLocation": revocation_registry_definition.value.tails_location,
-                }),
-                "issuerId": revocation_registry_definition.cred_def_id.split('/')[0]
-
+                "value": json.dumps(
+                    {
+                        "issuanceType": "ISSUANCE_BY_DEFAULT",
+                        "maxCredNum": revocation_registry_definition.value.max_cred_num,
+                        "publicKeys": revocation_registry_definition.value.public_keys,
+                        "tailsHash": revocation_registry_definition.value.tails_hash,
+                        "tailsLocation": revocation_registry_definition.value.tails_location,
+                    }
+                ),
+                "issuerId": revocation_registry_definition.cred_def_id.split("/")[0],
             }
 
             abi = json.loads(REVOCATION_REGISTRY_ABI)
@@ -598,14 +596,23 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
             Chain_id = self.web3.eth.chain_id
             nonce = self.web3.eth.get_transaction_count(self.ACCOUNT)
             LOGGER.debug(f"Creating rev reg: {indy_rev_reg_def}")
-            call_function = contract.functions.createRevocationRegistry(indy_rev_reg_def).build_transaction({"chainId": Chain_id, "from": self.ACCOUNT, "nonce": nonce, "gas": 3000000})
-            
+            call_function = contract.functions.createRevocationRegistry(
+                indy_rev_reg_def
+            ).build_transaction(
+                {
+                    "chainId": Chain_id,
+                    "from": self.ACCOUNT,
+                    "nonce": nonce,
+                    "gas": 3000000,
+                }
+            )
+
             tx_receipt = await self.send_transaction_tx(call_function)
 
             # receipt = contract.functions.createSchema(indy_schema).transact({"from": self.ACCOUNT})
             LOGGER.debug("Receipt: %s", tx_receipt)
-            # Was it realy created? 
-            result = contract.functions.resolveRevocation(rev_reg_def_id).call()        
+            # Was it realy created?
+            result = contract.functions.resolveRevocation(rev_reg_def_id).call()
 
             seq_no = self.REVOCATION_ADDRESS
         except LedgerError as err:
@@ -639,12 +646,8 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
             if max_cred_num:
                 return max_cred_num
 
-        abi = json.loads(REVOCATION_REGISTRY_ABI)
-        address = self.web3.to_checksum_address(self.REVOCATION_ADDRESS)
-        contract = self.web3.eth.contract(address=address, abi=abi)
-        # Was it realy created? 
-        rev_reg_def = contract.functions.resolveRevocation(rev_reg_def_id).call()      
-        max_cred_num = json.loads(rev_reg_def[0][5])['maxCredNum']
+        rev_reg_def = await ledger.get_revoc_reg_def(rev_reg_def_id)
+        max_cred_num = rev_reg_def["value"]["maxCredNum"]
 
         if cache:
             await cache.set(cache_key, max_cred_num)
@@ -681,22 +684,16 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         """Fetch the revocation registry delta."""
         ledger_id, ledger = await self._get_ledger(profile, rev_reg_def_id)
 
-        # async with ledger:
-            # delta, timestamp = await ledger.get_revoc_reg_delta(
-            #     rev_reg_def_id, timestamp_to=timestamp
-            # )
-        abi = json.loads(REVOCATION_REGISTRY_ABI)
-        address = self.web3.to_checksum_address(self.REVOCATION_ADDRESS)
-        contract = self.web3.eth.contract(address=address, abi=abi)
-        delta = contract.functions.resolveEntry(rev_reg_def_id).call()    
-        LOGGER.debug(f"Received delta: {delta}")
-        timestamp = delta[1][2]
-        delta = json.loads(delta[0][2])
-        if delta is None:
-            raise AnonCredsObjectNotFound(
-                f"Revocation list not found for rev reg def: {rev_reg_def_id}",
-                {"ledger_id": ledger_id},
+        async with ledger:
+            delta, timestamp = await ledger.get_revoc_reg_delta(
+                rev_reg_def_id, timestamp_to=timestamp
             )
+
+            if delta is None:
+                raise AnonCredsObjectNotFound(
+                    f"Revocation list not found for rev reg def: {rev_reg_def_id}",
+                    {"ledger_id": ledger_id},
+                )
         LOGGER.debug("Retrieved delta: %s", delta)
         return delta, timestamp
 
@@ -704,31 +701,14 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         self, profile: Profile, rev_reg_def_id: str, timestamp: int
     ) -> GetRevListResult:
         """Get the revocation registry list."""
-        # async with ledger:
-        #     max_cred_num = await self._get_or_fetch_rev_reg_def_max_cred_num(
-        #         profile, ledger, rev_reg_def_id
-        #     )
-        #     revocation_list_from_indexes = self._indexes_to_bit_array(
-        #         delta["value"]["revoked"], max_cred_num
-        #     )
-        #     LOGGER.debug(
-        #         "Index list to full state bit array: %s", revocation_list_from_indexes
-        #     )
-        # abi = json.loads(REVOCATION_REGISTRY_ABI)
-        # address = self.web3.to_checksum_address(self.REVOCATION_ADDRESS)
-        # contract = self.web3.eth.contract(address=address, abi=abi)
-        # Chain_id = self.web3.eth.chain_id
-        # nonce = self.web3.eth.get_transaction_count(self.ACCOUNT)        
         _, ledger = await self._get_ledger(profile, rev_reg_def_id)
-          # rev_reg_def_value = RevRegDefValue.deserialize(rev_reg_def["value"])
         delta, timestamp = await self.get_revocation_registry_delta(
             profile, rev_reg_def_id, timestamp
         )
         max_cred_num = await self._get_or_fetch_rev_reg_def_max_cred_num(
             profile, ledger, rev_reg_def_id
         )
-        
-        # delta = contract.functions.resolveRevocation(rev_reg_def_id).call()    
+
         delta_list = delta["value"]["revoked"] if delta["value"].get("revoked") else []
         revocation_list_from_indexes = self._indexes_to_bit_array(
             delta_list, max_cred_num
@@ -737,7 +717,7 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         rev_list = RevList(
             issuer_id=rev_reg_def_id.split("/")[0],
             rev_reg_def_id=rev_reg_def_id,
-            revocation_list=revocation_list_from_indexes, # rever isso depois
+            revocation_list=revocation_list_from_indexes,  # rever isso depois
             current_accumulator=delta["value"]["accum"],
             timestamp=timestamp,
         )
@@ -759,34 +739,43 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         """Send a revocation registry entry to the ledger with fixes if needed."""
         try:
             # async with ledger:
-                # rev_entry_res = await ledger.send_revoc_reg_entry(
-                #     rev_list.rev_reg_def_id,
-                #     rev_reg_def_type,
-                #     entry,
-                #     rev_list.issuer_id,
-                #     write_ledger=True,
-                #     endorser_did=None,
-                # )
+            # rev_entry_res = await ledger.send_revoc_reg_entry(
+            #     rev_list.rev_reg_def_id,
+            #     rev_reg_def_type,
+            #     entry,
+            #     rev_list.issuer_id,
+            #     write_ledger=True,
+            #     endorser_did=None,
+            # )
             abi = json.loads(REVOCATION_REGISTRY_ABI)
             address = self.web3.to_checksum_address(self.REVOCATION_ADDRESS)
             contract = self.web3.eth.contract(address=address, abi=abi)
             Chain_id = self.web3.eth.chain_id
             nonce = self.web3.eth.get_transaction_count(self.ACCOUNT)
-            rev_entry = {"revDefId": rev_list.rev_reg_def_id,
-                        "regDefType": rev_reg_def_type,
-                        "entry": json.dumps(entry),
-                        "issuerId": rev_list.issuer_id
-                        }
+            rev_entry = {
+                "revDefId": rev_list.rev_reg_def_id,
+                "regDefType": rev_reg_def_type,
+                "entry": json.dumps(entry),
+                "issuerId": rev_list.issuer_id,
+            }
             call_function = contract.functions.createOrUpdateEntry(
                 rev_entry
-            ).build_transaction({"chainId": Chain_id, "from": self.ACCOUNT, "nonce": nonce, "gas": 3000000})
-            
+            ).build_transaction(
+                {
+                    "chainId": Chain_id,
+                    "from": self.ACCOUNT,
+                    "nonce": nonce,
+                    "gas": 3000000,
+                }
+            )
+
             rev_entry_res = await self.send_transaction_tx(call_function)
-            rev_entry_res = contract.functions.resolveEntry(rev_list.rev_reg_def_id).call()      
-            
+            rev_entry_res = contract.functions.resolveEntry(
+                rev_list.rev_reg_def_id
+            ).call()
+
             LOGGER.debug("Receipt: %s", rev_entry_res)
 
-            
         except LedgerTransactionError as err:
             if "InvalidClientRequest" in err.roll_up:
                 # ... if the ledger write fails (with "InvalidClientRequest")

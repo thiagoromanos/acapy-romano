@@ -1,503 +1,160 @@
-"""Besu-VDR ledger implementation."""
-
-import asyncio
 import json
-import hashlib
 import logging
-import os
-import os.path
-import tempfile
+from typing import List, Tuple
 
-from datetime import datetime, date
-from io import StringIO
-from pathlib import Path
-from time import time
-from typing import List, Tuple, Union, Optional
+from web3 import Web3
+from web3.contract.contract import ContractFunction
+from web3.middleware import geth_poa_middleware
+from web3.types import TxReceipt
 
-from indy_vdr import ledger, open_pool, Pool, Request, VdrError
+from aries_cloudagent.wallet.base import BaseWallet
 
 from ..cache.base import BaseCache
 from ..core.profile import Profile
-from ..messaging.valid import IndyDID
-from ..storage.base import BaseStorage, StorageRecord
-from ..utils import sentinel
-from ..utils.env import storage_path
-from ..wallet.base import BaseWallet, DIDInfo
-from ..wallet.error import WalletNotFoundError
-from ..wallet.did_posture import DIDPosture
-
-from .base import BaseLedger, Role
-from .endpoint_type import EndpointType
-from .error import (
-    BadLedgerRequestError,
-    ClosedPoolError,
-    LedgerConfigError,
-    LedgerError,
-    LedgerTransactionError,
-)
-from .util import TAA_ACCEPTED_RECORD_TYPE
-from web3 import Web3
-
+from ..ledger.base import BaseLedger
+from ..ledger.endpoint_type import EndpointType
+from ..ledger.error import LedgerError, LedgerObjectAlreadyExistsError
+from ..wallet.did_info import DIDInfo
 
 LOGGER = logging.getLogger(__name__)
 
-
-def _normalize_txns(txns: str) -> str:
-    """Normalize a set of genesis transactions."""
-    lines = StringIO()
-    for line in txns.splitlines():
-        line = line.strip()
-        if line:
-            lines.write(line)
-            lines.write("\n")
-    return lines.getvalue()
+CREDENTIAL_DEFINITION_REGISTRY = "CredentialDefinitionRegistry"
+SCHEMA_REGISTRY = "SchemaRegistry"
+REVOCATION_REGISTRY = "RevocationRegistry"
 
 
-def _write_safe(path: Path, content: str):
-    """Atomically write to a file path."""
-    dir_path = path.parent
-    with tempfile.NamedTemporaryFile(dir=dir_path, delete=False) as tmp:
-        tmp.write(content.encode("utf-8"))
-        tmp_name = tmp.name
-    os.rename(tmp_name, path)
-
-
-def _hash_txns(txns: str) -> str:
-    """Obtain a hash of a set of genesis transactions."""
-    return hashlib.sha256(txns.encode("utf-8")).hexdigest()[-16:]
-
-
-class BesuVdrLedgerPool:
-    """Besu-VDR ledger pool manager."""
+class BesuVDRWeb3Config:
+    """Configurations."""
 
     def __init__(
         self,
-        name: str,
-        *,
-        keepalive: int = 0,
-        cache: BaseCache = None,
-        cache_duration: int = 600,
-        genesis_transactions: str = None,
-        read_only: bool = False,
-        socks_proxy: str = None,
-    ):
-        """
-        Initialize an BesuLedger instance.
-
-        Args:
-            name: The pool ledger configuration name
-            keepalive: How many seconds to keep the ledger open
-            cache: The cache instance to use
-            cache_duration: The TTL for ledger cache entries
-            genesis_transactions: The ledger genesis transaction as a string
-            read_only: Prevent any ledger write operations
-            socks_proxy: Specifies socks proxy for ZMQ to connect to ledger pool
-        """
-        self.ref_count = 0
-        self.ref_lock = asyncio.Lock()
-        self.keepalive = keepalive
-        self.close_task: asyncio.Future = None
-        self.cache = cache
-        self.cache_duration: int = cache_duration
-        self.handle: Pool = None
-        self.name = name
-        self.cfg_path_cache: Path = None
-        self.genesis_hash_cache: str = None
-        self.genesis_txns_cache = genesis_transactions
-        self.init_config = bool(genesis_transactions)
-        self.taa_cache: str = None
-        self.read_only: bool = read_only
-        self.socks_proxy: str = socks_proxy
+        ledgerAddr: str,
+        contractAddrs: dict,
+        trusteeAccount: str = None,
+        trusteePKey: str = None,
+    ) -> None:
+        """Configurations for Besu VDR."""
+        self.ledgerAddr = ledgerAddr
+        self.trusteeAccount = trusteeAccount
+        self.trusteePKey = trusteePKey
+        self.contractAddrs = contractAddrs
+        self.contractAbis = {}
 
     @property
-    def cfg_path(self) -> Path:
-        """Get the path to the configuration file, ensuring it's created."""
-        if not self.cfg_path_cache:
-            self.cfg_path_cache = storage_path("vdr", create=True)
-        return self.cfg_path_cache
+    def read_only(self) -> bool:
+        """If the access is readOnly."""
+        return self.trusteeAccount and self.trusteePKey
 
-    @property
-    def genesis_hash(self) -> str:
-        """Get the hash of the configured genesis transactions."""
-        if not self.genesis_hash_cache:
-            self.genesis_hash_cache = _hash_txns(self.genesis_txns)
-        return self.genesis_hash_cache
-
-    @property
-    def genesis_txns(self) -> str:
-        """Get the configured genesis transactions."""
-        if not self.genesis_txns_cache:
-            try:
-                path = self.cfg_path.joinpath(self.name, "genesis")
-                self.genesis_txns_cache = _normalize_txns(open(path).read())
-            except FileNotFoundError:
-                raise LedgerConfigError(
-                    "Pool config '%s' not found", self.name
-                ) from None
-        return self.genesis_txns_cache
-
-    async def create_pool_config(
-        self, genesis_transactions: str, recreate: bool = False
-    ):
-        """Create the pool ledger configuration."""
-
-        cfg_pool = self.cfg_path.joinpath(self.name)
-        cfg_pool.mkdir(exist_ok=True)
-        genesis = _normalize_txns(genesis_transactions)
-        if not genesis:
-            raise LedgerConfigError("Empty genesis transactions")
-
-        genesis_path = cfg_pool.joinpath("genesis")
-        try:
-            cmp_genesis = open(genesis_path).read()
-            if _normalize_txns(cmp_genesis) == genesis:
-                LOGGER.debug(
-                    "Pool ledger config '%s' is consistent, skipping write",
-                    self.name,
-                )
-                return
-            elif not recreate:
-                raise LedgerConfigError(
-                    f"Pool ledger '{self.name}' exists with "
-                    "different genesis transactions"
-                )
-        except FileNotFoundError:
-            pass
-
-        try:
-            _write_safe(genesis_path, genesis)
-        except OSError as err:
-            raise LedgerConfigError("Error writing genesis transactions") from err
-        LOGGER.debug("Wrote pool ledger config '%s'", self.name)
-
-        self.genesis_txns_cache = genesis
-
-    async def open(self):
-        """Open the pool ledger, creating it if necessary."""
-        pass
-
-    async def close(self):
-        """Close the pool ledger."""
-        if self.handle:
-            exc = None
-            for attempt in range(3):
-                try:
-                    self.handle.close()
-                except VdrError as err:
-                    await asyncio.sleep(0.01)
-                    exc = err
-                    continue
-
-                self.handle = None
-                exc = None
-                break
-
-            if exc:
-                LOGGER.exception("Exception when closing pool ledger", exc_info=exc)
-                self.ref_count += 1  # if we are here, we should have self.ref_lock
-                self.close_task = None
-                raise LedgerError("Exception when closing pool ledger") from exc
-
-    async def context_open(self):
-        """Open the ledger if necessary and increase the number of active references."""
-        async with self.ref_lock:
-            if self.close_task:
-                self.close_task.cancel()
-            if not self.handle:
-                LOGGER.debug("Opening the pool ledger")
-                await self.open()
-            self.ref_count += 1
-
-    async def context_close(self):
-        """Release the reference and schedule closing of the pool ledger."""
-
-        async def closer(timeout: int):
-            """Close the pool ledger after a timeout."""
-            await asyncio.sleep(timeout)
-            async with self.ref_lock:
-                if not self.ref_count:
-                    LOGGER.debug("Closing pool ledger after timeout")
-                    await self.close()
-
-        async with self.ref_lock:
-            self.ref_count -= 1
-            if not self.ref_count:
-                if self.keepalive:
-                    self.close_task = asyncio.ensure_future(closer(self.keepalive))
-                else:
-                    await self.close()
+    def loadConfigs(self):
+        """Load the abis (TODO: load from file)."""
+        self.contractAbis[CREDENTIAL_DEFINITION_REGISTRY] = json.loads(
+            '[{"inputs":[{"internalType":"address","name":"target","type":"address"}],"name":"AddressEmptyCode","type":"error"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"CredentialDefinitionAlreadyExist","type":"error"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"CredentialDefinitionNotFound","type":"error"},{"inputs":[{"internalType":"address","name":"implementation","type":"address"}],"name":"ERC1967InvalidImplementation","type":"error"},{"inputs":[],"name":"ERC1967NonPayable","type":"error"},{"inputs":[],"name":"FailedInnerCall","type":"error"},{"inputs":[{"internalType":"string","name":"name","type":"string"}],"name":"FieldRequired","type":"error"},{"inputs":[],"name":"InvalidInitialization","type":"error"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"InvalidIssuerId","type":"error"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"IssuerHasBeenDeactivated","type":"error"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"IssuerNotFound","type":"error"},{"inputs":[],"name":"NotInitializing","type":"error"},{"inputs":[],"name":"PackedPtrLen__LenOverflow","type":"error"},{"inputs":[],"name":"PackedPtrLen__PtrOverflow","type":"error"},{"inputs":[{"internalType":"address","name":"sender","type":"address"},{"internalType":"address","name":"owner","type":"address"}],"name":"SenderIsNotIssuerDidOwner","type":"error"},{"inputs":[],"name":"UUPSUnauthorizedCallContext","type":"error"},{"inputs":[{"internalType":"bytes32","name":"slot","type":"bytes32"}],"name":"UUPSUnsupportedProxiableUUID","type":"error"},{"inputs":[{"internalType":"string","name":"credDefType","type":"string"}],"name":"UnsupportedCredentialDefinitionType","type":"error"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"string","name":"credentialDefinitionId","type":"string"},{"indexed":true,"internalType":"address","name":"sender","type":"address"}],"name":"CredentialDefinitionCreated","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"uint64","name":"version","type":"uint64"}],"name":"Initialized","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"implementation","type":"address"}],"name":"Upgraded","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"string","name":"reason","type":"string"}],"name":"testError","type":"event"},{"inputs":[],"name":"UPGRADE_INTERFACE_VERSION","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"issuerId","type":"string"},{"internalType":"string","name":"schemaId","type":"string"},{"internalType":"string","name":"credDefType","type":"string"},{"internalType":"string","name":"tag","type":"string"},{"internalType":"string","name":"value","type":"string"}],"internalType":"struct CredentialDefinition","name":"credDef","type":"tuple"}],"name":"createCredentialDefinition","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"upgradeControlAddress","type":"address"},{"internalType":"address","name":"didResolverAddress","type":"address"},{"internalType":"address","name":"schemaRegistryAddress","type":"address"}],"name":"initialize","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"proxiableUUID","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"resolveCredentialDefinition","outputs":[{"components":[{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"issuerId","type":"string"},{"internalType":"string","name":"schemaId","type":"string"},{"internalType":"string","name":"credDefType","type":"string"},{"internalType":"string","name":"tag","type":"string"},{"internalType":"string","name":"value","type":"string"}],"internalType":"struct CredentialDefinition","name":"credDef","type":"tuple"},{"components":[{"internalType":"uint256","name":"created","type":"uint256"}],"internalType":"struct CredentialDefinitionMetadata","name":"metadata","type":"tuple"}],"internalType":"struct CredentialDefinitionWithMetadata","name":"credDefWithMetadata","type":"tuple"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"newImplementation","type":"address"},{"internalType":"bytes","name":"data","type":"bytes"}],"name":"upgradeToAndCall","outputs":[],"stateMutability":"payable","type":"function"}]'
+        )
+        self.contractAbis[SCHEMA_REGISTRY] = json.loads(
+            '[{"inputs":[{"internalType":"address","name":"target","type":"address"}],"name":"AddressEmptyCode","type":"error"},{"inputs":[{"internalType":"address","name":"implementation","type":"address"}],"name":"ERC1967InvalidImplementation","type":"error"},{"inputs":[],"name":"ERC1967NonPayable","type":"error"},{"inputs":[],"name":"FailedInnerCall","type":"error"},{"inputs":[{"internalType":"string","name":"name","type":"string"}],"name":"FieldRequired","type":"error"},{"inputs":[],"name":"InvalidInitialization","type":"error"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"InvalidIssuerId","type":"error"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"InvalidSchemaId","type":"error"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"IssuerHasBeenDeactivated","type":"error"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"IssuerNotFound","type":"error"},{"inputs":[],"name":"NotInitializing","type":"error"},{"inputs":[],"name":"PackedPtrLen__LenOverflow","type":"error"},{"inputs":[],"name":"PackedPtrLen__PtrOverflow","type":"error"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"SchemaAlreadyExist","type":"error"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"SchemaNotFound","type":"error"},{"inputs":[{"internalType":"address","name":"sender","type":"address"},{"internalType":"address","name":"owner","type":"address"}],"name":"SenderIsNotIssuerDidOwner","type":"error"},{"inputs":[],"name":"UUPSUnauthorizedCallContext","type":"error"},{"inputs":[{"internalType":"bytes32","name":"slot","type":"bytes32"}],"name":"UUPSUnsupportedProxiableUUID","type":"error"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"uint64","name":"version","type":"uint64"}],"name":"Initialized","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"string","name":"schemaId","type":"string"},{"indexed":true,"internalType":"address","name":"sender","type":"address"}],"name":"SchemaCreated","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"implementation","type":"address"}],"name":"Upgraded","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"string","name":"reason","type":"string"}],"name":"testError","type":"event"},{"inputs":[],"name":"UPGRADE_INTERFACE_VERSION","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"issuerId","type":"string"},{"internalType":"string","name":"name","type":"string"},{"internalType":"string","name":"version","type":"string"},{"internalType":"string[]","name":"attrNames","type":"string[]"}],"internalType":"struct Schema","name":"schema","type":"tuple"}],"name":"createSchema","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"upgradeControlAddress","type":"address"},{"internalType":"address","name":"didResolverAddress","type":"address"}],"name":"initialize","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"proxiableUUID","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"resolveSchema","outputs":[{"components":[{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"issuerId","type":"string"},{"internalType":"string","name":"name","type":"string"},{"internalType":"string","name":"version","type":"string"},{"internalType":"string[]","name":"attrNames","type":"string[]"}],"internalType":"struct Schema","name":"schema","type":"tuple"},{"components":[{"internalType":"uint256","name":"created","type":"uint256"}],"internalType":"struct SchemaMetadata","name":"metadata","type":"tuple"}],"internalType":"struct SchemaWithMetadata","name":"schemaWithMetadata","type":"tuple"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"newImplementation","type":"address"},{"internalType":"bytes","name":"data","type":"bytes"}],"name":"upgradeToAndCall","outputs":[],"stateMutability":"payable","type":"function"}]'
+        )
+        self.contractAbis[REVOCATION_REGISTRY] = json.loads(
+            '[{"inputs":[{"internalType":"address","name":"target","type":"address"}],"name":"AddressEmptyCode","type":"error"},{"inputs":[{"internalType":"address","name":"implementation","type":"address"}],"name":"ERC1967InvalidImplementation","type":"error"},{"inputs":[],"name":"ERC1967NonPayable","type":"error"},{"inputs":[],"name":"FailedInnerCall","type":"error"},{"inputs":[],"name":"InvalidInitialization","type":"error"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"InvalidIssuerId","type":"error"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"IssuerHasBeenDeactivated","type":"error"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"IssuerNotFound","type":"error"},{"inputs":[],"name":"NotInitializing","type":"error"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"RevocationAlreadyExist","type":"error"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"RevocationNotFound","type":"error"},{"inputs":[{"internalType":"address","name":"sender","type":"address"},{"internalType":"address","name":"creator","type":"address"}],"name":"SenderIsNotCreator","type":"error"},{"inputs":[{"internalType":"address","name":"sender","type":"address"},{"internalType":"address","name":"owner","type":"address"}],"name":"SenderIsNotIssuerDidOwner","type":"error"},{"inputs":[],"name":"UUPSUnauthorizedCallContext","type":"error"},{"inputs":[{"internalType":"bytes32","name":"slot","type":"bytes32"}],"name":"UUPSUnsupportedProxiableUUID","type":"error"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"string","name":"RevocationId","type":"string"},{"indexed":true,"internalType":"address","name":"sender","type":"address"}],"name":"CredentialRevoked","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"string","name":"RevocationId","type":"string"},{"indexed":true,"internalType":"address","name":"sender","type":"address"}],"name":"CredentialUnrevoked","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"uint64","name":"version","type":"uint64"}],"name":"Initialized","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"string","name":"RevRegId","type":"string"},{"indexed":true,"internalType":"address","name":"sender","type":"address"}],"name":"RevListCreated","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"string","name":"RevocationId","type":"string"},{"indexed":true,"internalType":"address","name":"sender","type":"address"}],"name":"RevocationCreated","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"implementation","type":"address"}],"name":"Upgraded","type":"event"},{"inputs":[],"name":"UPGRADE_INTERFACE_VERSION","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[{"components":[{"internalType":"string","name":"revDefId","type":"string"},{"internalType":"string","name":"regDefType","type":"string"},{"internalType":"string","name":"entry","type":"string"},{"internalType":"string","name":"issuerId","type":"string"}],"internalType":"struct RevocationRegEntry","name":"revEntry","type":"tuple"}],"name":"createOrUpdateEntry","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"issuerId","type":"string"},{"internalType":"string","name":"credDefId","type":"string"}],"internalType":"struct Revocation","name":"_revocation","type":"tuple"}],"name":"createRevocation","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"components":[{"internalType":"string","name":"ver","type":"string"},{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"revocDefType","type":"string"},{"internalType":"string","name":"credDefId","type":"string"},{"internalType":"string","name":"tag","type":"string"},{"internalType":"string","name":"value","type":"string"},{"internalType":"string","name":"issuerId","type":"string"}],"internalType":"struct RevocationReg","name":"revRegistry","type":"tuple"}],"name":"createRevocationRegistry","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"upgradeControlAddress","type":"address"},{"internalType":"address","name":"didResolverAddress","type":"address"},{"internalType":"address","name":"credDefRegistryAddress","type":"address"}],"name":"initialize","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"proxiableUUID","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"resolveEntry","outputs":[{"components":[{"components":[{"internalType":"string","name":"revDefId","type":"string"},{"internalType":"string","name":"regDefType","type":"string"},{"internalType":"string","name":"entry","type":"string"},{"internalType":"string","name":"issuerId","type":"string"}],"internalType":"struct RevocationRegEntry","name":"revEntry","type":"tuple"},{"components":[{"internalType":"uint256","name":"created","type":"uint256"},{"internalType":"address","name":"creator","type":"address"},{"internalType":"uint256","name":"updated","type":"uint256"}],"internalType":"struct RevocationEntryMetadata","name":"metadata","type":"tuple"}],"internalType":"struct RevocationEntryWithMetadata","name":"revEntryMetadata","type":"tuple"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"resolveRevocation","outputs":[{"components":[{"components":[{"internalType":"string","name":"ver","type":"string"},{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"revocDefType","type":"string"},{"internalType":"string","name":"credDefId","type":"string"},{"internalType":"string","name":"tag","type":"string"},{"internalType":"string","name":"value","type":"string"},{"internalType":"string","name":"issuerId","type":"string"}],"internalType":"struct RevocationReg","name":"revocationReg","type":"tuple"},{"components":[{"internalType":"uint256","name":"created","type":"uint256"},{"internalType":"address","name":"creator","type":"address"},{"internalType":"uint256","name":"updated","type":"uint256"}],"internalType":"struct RevocationRegMetadata","name":"metadata","type":"tuple"}],"internalType":"struct RevocationRegWithMetadata","name":"revWithMetadata","type":"tuple"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"revokeCredential","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"newImplementation","type":"address"},{"internalType":"bytes","name":"data","type":"bytes"}],"name":"upgradeToAndCall","outputs":[],"stateMutability":"payable","type":"function"}]'
+        )
 
 
 class BesuVdrLedger(BaseLedger):
-    """Indy-VDR ledger class."""
+    """Handles Besu ledger."""
 
     BACKEND_NAME = "besu-vdr"
 
     def __init__(
         self,
-        pool: BesuVdrLedgerPool,
+        ledgerConfig: BesuVDRWeb3Config,
         profile: Profile,
-    ):
-        """
-        Initialize an BesuVdrLedger instance.
-
-        Args:
-            pool: The pool instance handling the raw ledger connection
-            profile: The active profile instance
-        """
-        self.pool = pool
+        cache: BaseCache = None,
+        cache_duration: int = 600,
+    ) -> None:
+        """Initialize BesuVDR ledger."""
+        self.ledgerConfig = ledgerConfig
+        self.cache = cache
         self.profile = profile
+        self.cache_duration = cache_duration
 
-    @property
-    def pool_handle(self):
-        """Accessor for the ledger pool handle."""
-        return self.pool.handle
-
-    @property
-    def pool_name(self) -> str:
-        """Accessor for the ledger pool name."""
-        return self.pool.name
+    def is_ledger_read_only(self) -> bool:
+        """If is read-only."""
+        return self.ledgerConfig.read_only
 
     @property
     def read_only(self) -> bool:
         """Accessor for the ledger read-only flag."""
-        return self.pool.read_only
-
-    async def is_ledger_read_only(self) -> bool:
-        """Check if ledger is read-only including TAA."""
-        if self.read_only:
-            return self.read_only
-        # if TAA is required and not accepted we should be in read-only mode
-        taa = await self.get_txn_author_agreement()
-        if taa["taa_required"]:
-            taa_acceptance = await self.get_latest_txn_author_acceptance()
-            if "mechanism" not in taa_acceptance:
-                return True
-        return self.read_only
+        return self.is_ledger_read_only()
 
     async def __aenter__(self) -> "BesuVdrLedger":
-        """
-        Context manager entry.
-
-        Returns:
-            The current instance
-
-        """
-        await super().__aenter__()
-        await self.pool.context_open()
+        """Context enter."""
+        LOGGER.debug("Loading abis...")
+        self.ledgerConfig.loadConfigs()
+        LOGGER.debug("Initializing web3...")
+        self.web3 = Web3(Web3.HTTPProvider(self.ledgerConfig.ledgerAddr))
+        self.web3.middleware_onion.inject(geth_poa_middleware, layer=0)
+        LOGGER.debug(f"Web3 initialized. Provider addr: {self.ledgerConfig.ledgerAddr}")
         return self
 
-    async def __aexit__(self, exc_type, exc, tb):
-        """Context manager exit."""
-        await self.pool.context_close()
-        await super().__aexit__(exc_type, exc, tb)
-
-    async def _submit(
-        self,
-        request: Union[str, Request],
-        sign: bool = None,
-        taa_accept: bool = None,
-        sign_did: DIDInfo = sentinel,
-        write_ledger: bool = True,
-    ) -> dict:
-        """
-        Sign and submit request to ledger.
-
-        Args:
-            request_json: The json string to submit
-            sign: whether or not to sign the request
-            taa_accept: whether to apply TAA acceptance to the (signed, write) request
-            sign_did: override the signing DID
-
-        """
-
-        if not self.pool_handle:
-            raise ClosedPoolError(
-                f"Cannot sign and submit request to closed pool '{self.pool_name}'"
-            )
-
-        if isinstance(request, str):
-            request = ledger.build_custom_request(request)
-        elif not isinstance(request, Request):
-            raise BadLedgerRequestError("Expected str or Request")
-
-        if sign is None or sign:
-            if sign_did is sentinel:
-                sign_did = await self.get_wallet_public_did()
-            if sign is None:
-                sign = bool(sign_did)
-
-        if sign:
-            if not sign_did:
-                raise BadLedgerRequestError("Cannot sign request without a public DID")
-
-            if taa_accept or taa_accept is None:
-                acceptance = await self.get_latest_txn_author_acceptance()
-                if acceptance:
-                    acceptance = {
-                        "taaDigest": acceptance["digest"],
-                        "mechanism": acceptance["mechanism"],
-                        "time": acceptance["time"],
-                    }
-                    request.set_txn_author_agreement_acceptance(acceptance)
-
-            async with self.profile.session() as session:
-                wallet = session.inject(BaseWallet)
-                request.set_signature(
-                    await wallet.sign_message(request.signature_input, sign_did.verkey)
-                )
-                del wallet
-
-        if not write_ledger:
-            return json.loads(request.body)
-
-        try:
-            request_result = await self.pool.handle.submit_request(request)
-        except VdrError as err:
-            raise LedgerTransactionError("Ledger request error") from err
-
-        return request_result
-
-    async def _create_schema_request(
-        self,
-        public_info: DIDInfo,
-        schema_json: str,
-        write_ledger: bool = True,
-        endorser_did: str = None,
-    ):
-        """Create the ledger request for publishing a schema."""
-        try:
-            schema_req = ledger.build_schema_request(public_info.did, schema_json)
-        except VdrError as err:
-            raise LedgerError("Exception when building schema request") from err
-
-        if endorser_did and not write_ledger:
-            schema_req.set_endorser(endorser_did)
-
-        return schema_req
-
     async def get_schema(self, schema_id: str) -> dict:
-        """
-        Get a schema from the cache if available, otherwise fetch from the ledger.
-
-        Args:
-            schema_id: The schema id (or stringified sequence number) to retrieve
-
-        """
-        if self.pool.cache:
-            result = await self.pool.cache.get(f"schema::{schema_id}")
+        """Get schema from ledger."""
+        if self.cache:
+            result = await self.cache.get(f"schema::{schema_id}")
             if result:
                 return result
 
         if schema_id.isdigit():
-            return await self.fetch_schema_by_seq_no(int(schema_id))
+            return await self.fetch_schema_by_seq_no(schema_id)
         else:
             return await self.fetch_schema_by_id(schema_id)
 
     async def fetch_schema_by_id(self, schema_id: str) -> dict:
-        """
-        Get schema from ledger.
+        """Fetching the schema from the ledger."""
 
-        Args:
-            schema_id: The schema id (or stringified sequence number) to retrieve
-
-        Returns:
-            Besu schema dict
-
-        """
-
-        public_info = await self.get_wallet_public_did()
-        public_did = public_info.did if public_info else None
-
+        address = self.web3.to_checksum_address(
+            self.ledgerConfig.contractAddrs[SCHEMA_REGISTRY]
+        )
+        contract = self.web3.eth.contract(
+            address=address, abi=self.ledgerConfig.contractAbis[SCHEMA_REGISTRY]
+        )
+        schema = None
         try:
-            schema_req = ledger.build_get_schema_request(public_did, schema_id)
-        except VdrError as err:
-            raise LedgerError("Exception when building get-schema request") from err
+            schema_result = contract.functions.resolveSchema(schema_id).call()
+            schema = {
+                "ver": "1.0",
+                "id": schema_result[0],
+                "issuerId": schema_result[1],
+                "name": schema_result[2],
+                "version": schema_result[3],
+                "attrNames": schema_result[4],
+                "seqNo": "besu",
+            }
 
-        response = await self._submit(schema_req, sign_did=public_info)
+            if self.cache:
+                await self.cache.set(
+                    f"schema::{schema_id}",
+                    schema,
+                    self.cache_duration,
+                )
 
-        schema_seqno = response.get("seqNo")
-        if not schema_seqno:
-            return None  # schema not found
-
-        schema_name = response["data"]["name"]
-        schema_version = response["data"]["version"]
-        schema_id = f"{response['dest']}:2:{schema_name}:{schema_version}"
-        schema_data = {
-            "ver": "1.0",
-            "id": schema_id,
-            "name": schema_name,
-            "version": schema_version,
-            "attrNames": response["data"]["attr_names"],
-            "seqNo": schema_seqno,
-        }
-
-        if self.pool.cache:
-            await self.pool.cache.set(
-                [f"schema::{schema_id}", f"schema::{schema_seqno}"],
-                schema_data,
-                self.pool.cache_duration,
-            )
-
-        return schema_data
+        except Exception as ex:
+            raise LedgerError(f"Could not retrieve schema {schema_id}.") from ex
+        return schema
 
     async def fetch_schema_by_seq_no(self, seq_no: int) -> dict:
-        """
-        Fetch a schema by its sequence number.
+        """Cant get schema by seqno in besu."""
+        LOGGER.error("SeqNo not available on Besu VDR")
+        raise NotImplementedError
 
-        Args:
-            seq_no: schema ledger sequence number
+    def credential_definition_id2schema_id(self, cred_def_id: str) -> str:
+        """Get schema id. Just regex, no need to search the ledger for this."""
 
-        Returns:
-            Besu schema dict
-
-        """
-        # get txn by sequence number, retrieve schema identifier components
-        try:
-            request = ledger.build_get_txn_request(None, None, seq_no=seq_no)
-        except VdrError as err:
-            raise LedgerError("Exception when building get-txn request") from err
-
-        response = await self._submit(request)
-
-        # transaction data format assumes node protocol >= 1.4 (circa 2018-07)
-        data_txn = (response.get("data", {}) or {}).get("txn", {})
-        if data_txn.get("type", None) == "101":  # marks indy-sdk schema txn type
-            (origin_did, name, version) = (
-                data_txn["metadata"]["from"],
-                data_txn["data"]["data"]["name"],
-                data_txn["data"]["data"]["version"],
-            )
-            schema_id = f"{origin_did}:2:{name}:{version}"
-            return await self.get_schema(schema_id)
-
-        raise LedgerTransactionError(
-            f"Could not get schema from ledger for seq no {seq_no}"
-        )
-
-    async def _create_credential_definition_request(
-        self,
-        public_info: DIDInfo,
-        credential_definition_json: str,
-        write_ledger: bool = True,
-        endorser_did: str = None,
-    ):
-        """Create the ledger request for publishing a credential definition."""
-        try:
-            cred_def_req = ledger.build_cred_def_request(
-                public_info.did, credential_definition_json
-            )
-        except VdrError as err:
-            raise LedgerError("Exception when building cred def request") from err
-
-        if endorser_did and not write_ledger:
-            cred_def_req.set_endorser(endorser_did)
-
-        return cred_def_req
+        schema_id = cred_def_id.split("CLAIM_DEF/")[1].split("/")
+        schema_id.pop()
+        schema_id = "/".join(schema_id)
+        return schema_id
 
     async def get_credential_definition(self, credential_definition_id: str) -> dict:
-        """
-        Get a credential definition from the cache if available, otherwise the ledger.
+        """Get a credential definition from the cache if available, otherwise the ledger.
 
         Args:
             credential_definition_id: The schema id of the schema to fetch cred def for
@@ -519,210 +176,242 @@ class BesuVdrLedger(BaseLedger):
         return await self.fetch_credential_definition(credential_definition_id)
 
     async def fetch_credential_definition(self, credential_definition_id: str) -> dict:
-        """
-        Get a credential definition from the ledger by id.
+        """Get a credential definition from the ledger by id.
 
         Args:
             credential_definition_id: The cred def id of the cred def to fetch
 
         """
 
-        public_info = await self.get_wallet_public_did()
-        public_did = public_info.did if public_info else None
+        # TODO: use public did
+        address = self.web3.to_checksum_address(
+            self.ledgerConfig.contractAddrs[CREDENTIAL_DEFINITION_REGISTRY]
+        )
+        contract = self.web3.eth.contract(
+            address=address,
+            abi=self.ledgerConfig.contractAddrs[CREDENTIAL_DEFINITION_REGISTRY],
+        )
 
-        try:
-            cred_def_req = ledger.build_get_cred_def_request(
-                public_did, credential_definition_id
+        cred_def = contract.functions.resolveCredentialDefinition(
+            credential_definition_id
+        ).call()
+
+        if not len(cred_def):
+            raise LedgerError(
+                f"Credential definition not found: {credential_definition_id}",
+                {"ledger_id": "Besu"},
             )
-        except VdrError as err:
-            raise LedgerError("Exception when building get-cred-def request") from err
 
-        response = await self._submit(cred_def_req, sign_did=public_info)
-        if not response["data"]:
-            return None
-
-        schema_id = str(response["ref"])
-        signature_type = response["signature_type"]
-        tag = response.get("tag", "default")
-        origin_did = response["origin"]
-        # FIXME: issuer has a method to create a cred def ID
-        # may need to qualify the DID
-        cred_def_id = f"{origin_did}:3:{signature_type}:{schema_id}:{tag}"
-
-        return {
-            "ver": "1.0",
-            "id": cred_def_id,
-            "schemaId": schema_id,
-            "type": signature_type,
-            "tag": tag,
-            "value": response["data"],
+        cred_def = cred_def[0]
+        result = {
+            "id": cred_def[0],
+            "issuerId": cred_def[1],
+            "schemaId": cred_def[2],
+            "type": cred_def[3],
+            "tag": cred_def[4],
+            "value": cred_def[5].replace("'", '"'),
         }
 
-    async def credential_definition_id2schema_id(self, credential_definition_id):
-        """
-        From a credential definition, get the identifier for its schema.
+        return result
+
+    async def get_revoc_reg_def(self, revoc_reg_id: str) -> dict:
+        """Get the revocation registry definition."""
+        address = self.web3.to_checksum_address(
+            self.ledgerConfig.contractAddrs[REVOCATION_REGISTRY]
+        )
+        contract = self.web3.eth.contract(
+            address=address, abi=self.ledgerConfig.contractAbis[REVOCATION_REGISTRY]
+        )
+        resolveResult = contract.functions.resolveRevocation(revoc_reg_id).call()
+        LOGGER.debug(f"Receive rev_reg {resolveResult}")
+        if len(resolveResult):
+
+            revocationReg = resolveResult[0]
+
+            result = {
+                "ver": revocationReg[0],
+                "id": revocationReg[1],
+                "revocDefType": revocationReg[2],
+                "credDefId": revocationReg[3],
+                "tag": revocationReg[4],
+                "value": json.loads(revocationReg[5]),
+                "issuerId": revocationReg[6],
+            }
+
+            return result
+
+        return None
+
+    async def get_revoc_reg_delta(
+        self, revoc_reg_id: str, timestamp_from=0, timestamp_to=None
+    ) -> Tuple[dict, int]:
+        """Get revocation delta."""
+        address = self.web3.to_checksum_address(
+            self.ledgerConfig.contractAddrs[REVOCATION_REGISTRY]
+        )
+        contract = self.web3.eth.contract(
+            address=address, abi=self.ledgerConfig.contractAbis[REVOCATION_REGISTRY]
+        )
+        delta = contract.functions.resolveEntry(revoc_reg_id).call()
+        LOGGER.debug(f"Received delta: {delta}")
+        timestamp = delta[1][2]
+        delta = json.loads(delta[0][2])
+        if delta is None:
+            raise LedgerError(
+                f"Revocation list not found for rev reg def: {revoc_reg_id}",
+                {"ledger_id": "Besu"},
+            )
+        LOGGER.debug("Retrieved delta: %s", delta)
+        return delta, timestamp
+
+    async def send_schema_anoncreds(
+        self,
+        schema_id: str,
+        schema_def: dict,
+        write_ledger: bool = True,
+        endorser_did: str = None,
+    ) -> Tuple[str, dict]:
+        """Send schema to ledger. (Override from BaseLedger).
 
         Args:
-            credential_definition_id: The identifier of the credential definition
-                from which to identify a schema
+            issuer: The issuer instance to use for schema creation
+            schema_name: The schema name
+            schema_version: The schema version
+            attribute_names: A list of schema attributes
+
+        """
+        # TODO: public_did
+        schema_info = await self.check_existing_schema_anoncreds(
+            schema_id, schema_def["attrNames"]
+        )
+        if schema_info:
+            LOGGER.warning("Schema already exists on ledger.")
+            raise LedgerObjectAlreadyExistsError(
+                "Schema already exists on ledger.", *schema_info
+            )
+        address = self.web3.to_checksum_address(
+            self.ledgerConfig.contractAddrs[SCHEMA_REGISTRY]
+        )
+        contract = self.web3.eth.contract(
+            address=address, abi=self.ledgerConfig.contractAbis[SCHEMA_REGISTRY]
+        )
+        call_function = contract.functions.createSchema(schema_def)
+        tx_receipt = self._send_signed_transaction(call_function)
+
+        LOGGER.debug("Receipt: %s", tx_receipt)
+
+        return schema_id
+
+    async def send_credential_definition_anoncreds(
+        self,
+        schema_id: str,
+        cred_def_id: str,
+        cred_def: dict,
+        write_ledger: bool = True,
+        endorser_did: str = None,
+    ) -> Tuple[str, dict, bool]:
+        """Send credential definition to ledger and store relevant key matter in wallet.
+
+        Args:
+            issuer: The issuer instance to use for credential definition creation
+            schema_id: The schema id of the schema to create cred def for
+            signature_type: The signature type to use on the credential definition
+            tag: Optional tag to distinguish multiple credential definitions
+            support_revocation: Optional flag to enable revocation for this cred def
+
+        Returns:
+            Tuple with cred def id, cred def structure, and whether it's novel
+
         """
 
-        # scrape schema id or sequence number from cred def id
-        tokens = credential_definition_id.split(":")
-        if len(tokens) == 8:  # node protocol >= 1.4: cred def id has 5 or 8 tokens
-            return ":".join(tokens[3:7])  # schema id spans 0-based positions 3-6
+        schema = await self.get_schema(schema_id)
+        if not schema:
+            raise LedgerError(f"Ledger has no schema {schema_id}")
 
-        # get txn by sequence number, retrieve schema identifier components
-        seq_no = tokens[3]
-        return (await self.get_schema(seq_no))["id"]
+        # check if cred def is on ledger already
+        ledger_cred_def = await self.fetch_credential_definition(cred_def_id)
+        if ledger_cred_def:
+            credential_definition_json = json.dumps(ledger_cred_def)
+            raise LedgerObjectAlreadyExistsError(
+                f"Credential definition with id {cred_def_id} "
+                "already exists in wallet and on ledger.",
+                cred_def_id,
+                credential_definition_json,
+            )
+
+        if self.is_ledger_read_only():
+            raise LedgerError(
+                "Error cannot write cred def when ledger is in read only mode"
+            )
+
+        address = self.web3.to_checksum_address(
+            self.ledgerConfig.contractAddrs[CREDENTIAL_DEFINITION_REGISTRY]
+        )
+        contract = self.web3.eth.contract(
+            address=address,
+            abi=self.ledgerConfig.contractAbis[CREDENTIAL_DEFINITION_REGISTRY],
+        )
+        call_function = contract.functions.createCredentialDefinition(cred_def)
+        tx_receipt = self._send_signed_transaction(call_function)
+        LOGGER.debug("Receipt: %s", tx_receipt)
+
+        result = self.fetch_credential_definition(cred_def_id)
+        if not result:
+            raise LedgerError("Failed to register credef")
+
+        return "besu"
+
+    def _send_signed_transaction(self, contractFunction: ContractFunction) -> TxReceipt:
+        nonce = self.web3.eth.get_transaction_count(self.ledgerConfig.trusteeAccount)
+        chain_id = self.web3.eth.chain_id
+        tx = contractFunction.build_transaction(
+            {
+                "chainId": chain_id,
+                "from": self.ledgerConfig.trusteeAccount,
+                "nonce": nonce,
+                "gas": 3000000,
+            }
+        )
+        # Sign transaction
+        signed_tx = self.web3.eth.account.sign_transaction(
+            tx, private_key=self.ledgerConfig.trusteePKey
+        )
+
+        # Send transaction
+        LOGGER.debug("Transaction: %s", signed_tx.rawTransaction)
+        send_tx = self.web3.eth.send_raw_transaction(signed_tx.rawTransaction)
+
+        # Wait for transaction receipt
+        tx_receipt = self.web3.eth.wait_for_transaction_receipt(send_tx)
+
+        return tx_receipt
 
     async def get_key_for_did(self, did: str) -> str:
-        """Fetch the verkey for a ledger DID.
-
-        Args:
-            did: The DID to look up on the ledger or in the cache
-        """
-        nym = self.did_to_nym(did)
-        public_info = await self.get_wallet_public_did()
-        public_did = public_info.did if public_info else None
-
-        # current public_did may be non-indy -> create nym request with empty public did
-        if public_did is not None and not bool(IndyDID.PATTERN.match(public_did)):
-            public_did = None
-
-        try:
-            nym_req = ledger.build_get_nym_request(public_did, nym)
-        except VdrError as err:
-            raise LedgerError("Exception when building get-nym request") from err
-
-        response = await self._submit(nym_req, sign_did=public_info)
-        data_json = response["data"]
-        return json.loads(data_json)["verkey"] if data_json else None
-
-    async def get_all_endpoints_for_did(self, did: str) -> dict:
-        """Fetch all endpoints for a ledger DID.
-
-        Args:
-            did: The DID to look up on the ledger or in the cache
-        """
-        nym = self.did_to_nym(did)
-        public_info = await self.get_wallet_public_did()
-        public_did = public_info.did if public_info else None
-        try:
-            attrib_req = ledger.build_get_attrib_request(
-                public_did, nym, "endpoint", None, None
-            )
-        except VdrError as err:
-            raise LedgerError("Exception when building attribute request") from err
-
-        response = await self._submit(attrib_req, sign_did=public_info)
-        data_json = response["data"]
-
-        if data_json:
-            endpoints = json.loads(data_json).get("endpoint", None)
-        else:
-            endpoints = None
-
-        return endpoints
+        """Get key for did."""
+        LOGGER.info(f"Getting key for did {did}")
+        raise NotImplementedError
 
     async def get_endpoint_for_did(
-        self, did: str, endpoint_type: EndpointType = None
+        self, did: str, endpoint_type: EndpointType = EndpointType.ENDPOINT
     ) -> str:
-        """Fetch the endpoint for a ledger DID.
+        raise NotImplementedError
 
-        Args:
-            did: The DID to look up on the ledger or in the cache
-            endpoint_type: The type of the endpoint. If none given, returns all
-        """
-
-        if not endpoint_type:
-            endpoint_type = EndpointType.ENDPOINT
-        nym = self.did_to_nym(did)
-        public_info = await self.get_wallet_public_did()
-        public_did = public_info.did if public_info else None
-        try:
-            attrib_req = ledger.build_get_attrib_request(
-                public_did, nym, "endpoint", None, None
-            )
-        except VdrError as err:
-            raise LedgerError("Exception when building attribute request") from err
-
-        response = await self._submit(attrib_req, sign_did=public_info)
-        data_json = response["data"]
-        if data_json:
-            endpoint = json.loads(data_json).get("endpoint", None)
-            address = endpoint.get(endpoint_type.indy, None) if endpoint else None
-        else:
-            address = None
-
-        return address
+    async def get_all_endpoints_for_did(self, did: str) -> dict:
+        raise NotImplementedError
 
     async def update_endpoint_for_did(
         self,
         did: str,
         endpoint: str,
-        endpoint_type: EndpointType = None,
+        endpoint_type: EndpointType = EndpointType.ENDPOINT,
         write_ledger: bool = True,
         endorser_did: str = None,
         routing_keys: List[str] = None,
     ) -> bool:
-        """Check and update the endpoint on the ledger.
-
-        Args:
-            did: The ledger DID
-            endpoint: The endpoint address
-            endpoint_type: The type of the endpoint
-        """
-        public_info = await self.get_wallet_public_did()
-        if not public_info:
-            raise BadLedgerRequestError(
-                "Cannot update endpoint at ledger without a public DID"
-            )
-
-        if not endpoint_type:
-            endpoint_type = EndpointType.ENDPOINT
-
-        all_exist_endpoints = await self.get_all_endpoints_for_did(did)
-        exist_endpoint_of_type = (
-            all_exist_endpoints.get(endpoint_type.indy, None)
-            if all_exist_endpoints
-            else None
+        LOGGER.info(
+            f"Trying to update did {did} setting endpoint to {endpoint}. That's not "
+            "implemented yet"
         )
-
-        if exist_endpoint_of_type != endpoint:
-            if self.read_only:
-                raise LedgerError(
-                    "Error cannot update endpoint when ledger is in read only mode"
-                )
-
-            nym = self.did_to_nym(did)
-
-            attr_json = await self._construct_attr_json(
-                endpoint, endpoint_type, all_exist_endpoints, routing_keys
-            )
-
-            try:
-                attrib_req = ledger.build_attrib_request(
-                    nym, nym, None, attr_json, None
-                )
-
-                if endorser_did and not write_ledger:
-                    attrib_req.set_endorser(endorser_did)
-                    resp = await self._submit(
-                        attrib_req,
-                        True,
-                        sign_did=public_info,
-                        write_ledger=write_ledger,
-                    )
-                    if not write_ledger:
-                        return {"signed_txn": resp}
-
-            except VdrError as err:
-                raise LedgerError("Exception when building attribute request") from err
-
-            await self._submit(attrib_req, True, True)
-            return True
-        return False
 
     async def register_nym(
         self,
@@ -733,330 +422,31 @@ class BesuVdrLedger(BaseLedger):
         write_ledger: bool = True,
         endorser_did: str = None,
     ) -> Tuple[bool, dict]:
-        """
-        Register a nym on the ledger.
+        raise NotImplementedError
 
-        Args:
-            did: DID to register on the ledger.
-            verkey: The verification key of the keypair.
-            alias: Human-friendly alias to assign to the DID.
-            role: For permissioned ledgers, what role should the new DID have.
-        """
-        if self.read_only:
-            raise LedgerError(
-                "Error cannot register nym when ledger is in read only mode"
-            )
-
-        public_info = await self.get_wallet_public_did()
-        if not public_info:
-            raise BadLedgerRequestError("Cannot register NYM without a public DID")
-
-        try:
-            nym_req = ledger.build_nym_request(
-                public_info.did, did, verkey, alias, role
-            )
-        except VdrError as err:
-            raise LedgerError("Exception when building nym request") from err
-
-        if endorser_did and not write_ledger:
-            nym_req.set_endorser(endorser_did)
-
-        resp = await self._submit(
-            nym_req, sign=True, sign_did=public_info, write_ledger=write_ledger
-        )
-        if not write_ledger:
-            return True, {"signed_txn": resp}
-        async with self.profile.session() as session:
-            wallet = session.inject(BaseWallet)
-            try:
-                did_info = await wallet.get_local_did(did)
-            except WalletNotFoundError:
-                pass  # not a local DID
-            else:
-                metadata = {**did_info.metadata, **DIDPosture.POSTED.metadata}
-                await wallet.replace_local_did_metadata(did, metadata)
-        return True, None
-
-    async def get_nym_role(self, did: str) -> Role:
-        """
-        Return the role of the input public DID's NYM on the ledger.
-
-        Args:
-            did: DID to query for role on the ledger.
-        """
-        public_info = await self.get_wallet_public_did()
-        public_did = public_info.did if public_info else None
-
-        try:
-            nym_req = ledger.build_get_nym_request(public_did, did)
-        except VdrError as err:
-            raise LedgerError("Exception when building get-nym request") from err
-
-        response = await self._submit(nym_req)
-        nym_data = json.loads(response["data"])
-        if not nym_data:
-            raise BadLedgerRequestError(f"DID {did} is not public")
-
-        return Role.get(nym_data["role"])
+    async def get_nym_role(self, did: str):
+        raise NotImplementedError
 
     def nym_to_did(self, nym: str) -> str:
-        """Format a nym with the ledger's DID prefix."""
-        if nym:
-            # remove any existing prefix
-            nym = self.did_to_nym(nym)
-            return f"did:sov:{nym}"
-
-    async def build_and_return_get_nym_request(
-        self, submitter_did: Optional[str], target_did: str
-    ) -> str:
-        """Build GET_NYM request and return request_json."""
-        try:
-            request_json = ledger.build_get_nym_request(submitter_did, target_did)
-            return request_json
-        except VdrError as err:
-            raise LedgerError("Exception when building get-nym request") from err
-
-    async def submit_get_nym_request(self, request_json: str) -> str:
-        """Submit GET_NYM request to ledger and return response_json."""
-        response_json = await self._submit(request_json)
-        return response_json
+        raise NotImplementedError
 
     async def rotate_public_did_keypair(self, next_seed: str = None) -> None:
-        """
-        Rotate keypair for public DID: create new key, submit to ledger, update wallet.
+        raise NotImplementedError
 
-        Args:
-            next_seed: seed for incoming ed25519 keypair (default random)
-        """
-        # generate new key
-        async with self.profile.transaction() as txn:
-            wallet = txn.inject(BaseWallet)
-            public_info = await wallet.get_public_did()
-            public_did = public_info.did
-            verkey = await wallet.rotate_did_keypair_start(public_did, next_seed)
-            del wallet
-            await txn.commit()
-
-        # fetch current nym info from ledger
-        nym = self.did_to_nym(public_did)
-        try:
-            get_nym_req = ledger.build_get_nym_request(public_did, nym)
-        except VdrError as err:
-            raise LedgerError("Exception when building nym request") from err
-
-        response = await self._submit(get_nym_req)
-        data = json.loads(response["data"])
-        if not data:
-            raise BadLedgerRequestError(
-                f"Ledger has no public DID for wallet {self.profile.name}"
-            )
-        seq_no = data["seqNo"]
-
-        try:
-            txn_req = ledger.build_get_txn_request(None, None, seq_no)
-        except VdrError as err:
-            raise LedgerError("Exception when building get-txn request") from err
-
-        txn_resp = await self._submit(txn_req)
-        txn_resp_data = txn_resp["data"]
-        if not txn_resp_data:
-            raise BadLedgerRequestError(
-                f"Bad or missing ledger NYM transaction for DID {public_did}"
-            )
-        txn_data_data = txn_resp_data["txn"]["data"]
-        role_token = Role.get(txn_data_data.get("role")).token()
-        alias = txn_data_data.get("alias")
-        # submit the updated nym record
-        await self.register_nym(public_did, verkey, alias=alias, role=role_token)
-
-        # update wallet
-        async with self.profile.transaction() as txn:
-            wallet = txn.inject(BaseWallet)
-            await wallet.rotate_did_keypair_apply(public_did)
-            del wallet
-            await txn.commit()
-
-    async def get_txn_author_agreement(self, reload: bool = False) -> dict:
-        """Get the current transaction author agreement, fetching it if necessary."""
-        if not self.pool.taa_cache or reload:
-            self.pool.taa_cache = await self.fetch_txn_author_agreement()
-        return self.pool.taa_cache
-
-    async def fetch_txn_author_agreement(self) -> dict:
-        """Fetch the current AML and TAA from the ledger."""
-        public_info = await self.get_wallet_public_did()
-        public_did = public_info.did if public_info else None
-
-        get_aml_req = ledger.build_get_acceptance_mechanisms_request(
-            public_did, None, None
-        )
-        response = await self._submit(get_aml_req, sign_did=public_info)
-        aml_found = response["data"]
-
-        get_taa_req = ledger.build_get_txn_author_agreement_request(public_did, None)
-        response = await self._submit(get_taa_req, sign_did=public_info)
-        taa_found = response["data"]
-        taa_required = bool(taa_found and taa_found["text"])
-        if taa_found:
-            taa_found["digest"] = self.taa_digest(
-                taa_found["version"], taa_found["text"]
-            )
-
-        return {
-            "aml_record": aml_found,
-            "taa_record": taa_found,
-            "taa_required": taa_required,
-        }
-
-    def taa_rough_timestamp(self) -> int:
-        """Get a timestamp accurate to the day.
-
-        Anything more accurate is a privacy concern.
-        """
-        return int(datetime.combine(date.today(), datetime.min.time()).timestamp())
-
-    async def accept_txn_author_agreement(
-        self, taa_record: dict, mechanism: str, accept_time: int = None
-    ):
-        """Save a new record recording the acceptance of the TAA."""
-        if not accept_time:
-            accept_time = self.taa_rough_timestamp()
-        acceptance = {
-            "text": taa_record["text"],
-            "version": taa_record["version"],
-            "digest": taa_record["digest"],
-            "mechanism": mechanism,
-            "time": accept_time,
-        }
-        record = StorageRecord(
-            TAA_ACCEPTED_RECORD_TYPE,
-            json.dumps(acceptance),
-            {"pool_name": self.pool_name},
-        )
+    async def get_wallet_public_did(self) -> DIDInfo:
+        """Fetch the public DID from the wallet."""
         async with self.profile.session() as session:
-            storage = session.inject(BaseStorage)
-            await storage.add_record(record)
-        if self.pool.cache:
-            cache_key = TAA_ACCEPTED_RECORD_TYPE + "::" + self.pool_name
-            await self.pool.cache.set(cache_key, acceptance, self.pool.cache_duration)
+            wallet = session.inject(BaseWallet)
+            return await wallet.get_public_did()
 
-    async def get_latest_txn_author_acceptance(self) -> dict:
-        """Look up the latest TAA acceptance."""
-        cache_key = TAA_ACCEPTED_RECORD_TYPE + "::" + self.pool_name
-        acceptance = self.pool.cache and await self.pool.cache.get(cache_key)
-        if not acceptance:
-            tag_filter = {"pool_name": self.pool_name}
-            async with self.profile.session() as session:
-                storage = session.inject(BaseStorage)
-                found = await storage.find_all_records(
-                    TAA_ACCEPTED_RECORD_TYPE, tag_filter
-                )
-            if found:
-                records = list(json.loads(record.value) for record in found)
-                records.sort(key=lambda v: v["time"], reverse=True)
-                acceptance = records[0]
-            else:
-                acceptance = {}
-            if self.pool.cache:
-                await self.pool.cache.set(
-                    cache_key, acceptance, self.pool.cache_duration
-                )
-        return acceptance
-
-    async def get_revoc_reg_def(self, revoc_reg_id: str) -> dict:
-        """Get revocation registry definition by ID."""
-        public_info = await self.get_wallet_public_did()
-        try:
-            fetch_req = ledger.build_get_revoc_reg_def_request(
-                public_info and public_info.did, revoc_reg_id
-            )
-            response = await self._submit(fetch_req, sign_did=public_info)
-        except VdrError as err:
-            raise LedgerError(
-                f"get_revoc_reg_def failed for revoc_reg_id='{revoc_reg_id}'"
-            ) from err
-
-        revoc_reg_def = response["data"]
-        revoc_reg_def["ver"] = "1.0"
-        revoc_reg_def["txnTime"] = response["txnTime"]
-
-        if revoc_reg_def.get("id") != revoc_reg_id:
-            raise LedgerError(
-                "ID of revocation registry response does not match requested ID"
-            )
-        return revoc_reg_def
-
-    async def get_revoc_reg_entry(
-        self, revoc_reg_id: str, timestamp: int
-    ) -> Tuple[dict, int]:
-        """Get revocation registry entry by revocation registry ID and timestamp."""
-        public_info = await self.get_wallet_public_did()
-        try:
-            fetch_req = ledger.build_get_revoc_reg_request(
-                public_info and public_info.did, revoc_reg_id, timestamp
-            )
-            response = await self._submit(fetch_req, sign_did=public_info)
-        except VdrError as err:
-            raise LedgerError(
-                f"get_revoc_reg_entry failed for revoc_reg_id='{revoc_reg_id}'"
-            ) from err
-
-        ledger_timestamp = response["data"]["txnTime"]
-        reg_entry = {
-            "ver": "1.0",
-            "value": response["data"]["value"],
-        }
-        if response["data"]["revocRegDefId"] != revoc_reg_id:
-            raise LedgerError(
-                "ID of revocation registry response does not match requested ID"
-            )
-        return reg_entry, ledger_timestamp
-
-    async def get_revoc_reg_delta(
-        self, revoc_reg_id: str, timestamp_from=0, timestamp_to=None
-    ) -> Tuple[dict, int]:
-        """
-        Look up a revocation registry delta by ID.
-
-        :param revoc_reg_id revocation registry id
-        :param timestamp_from from time. a total number of seconds from Unix Epoch
-        :param timestamp_to to time. a total number of seconds from Unix Epoch
-
-        :returns delta response, delta timestamp
-        """
-        if timestamp_to is None:
-            timestamp_to = int(time())
-        public_info = await self.get_wallet_public_did()
-        try:
-            fetch_req = ledger.build_get_revoc_reg_delta_request(
-                public_info and public_info.did,
-                revoc_reg_id,
-                timestamp_from,
-                timestamp_to,
-            )
-            response = await self._submit(fetch_req, sign_did=public_info)
-        except VdrError as err:
-            raise LedgerError(
-                f"get_revoc_reg_delta failed for revoc_reg_id='{revoc_reg_id}'"
-            ) from err
-
-        response_value = response["data"]["value"]
-        delta_value = {
-            "accum": response_value["accum_to"]["value"]["accum"],
-            "issued": response_value.get("issued", []),
-            "revoked": response_value.get("revoked", []),
-        }
-        accum_from = response_value.get("accum_from")
-        if accum_from:
-            delta_value["prev_accum"] = accum_from["value"]["accum"]
-        reg_delta = {"ver": "1.0", "value": delta_value}
-        # question - why not response["to"] ?
-        delta_timestamp = response_value["accum_to"]["txnTime"]
-        if response["data"]["revocRegDefId"] != revoc_reg_id:
-            raise LedgerError(
-                "ID of revocation registry response does not match requested ID"
-            )
-        return reg_delta, delta_timestamp
+    async def _create_revoc_reg_def_request(
+        self,
+        public_info: DIDInfo,
+        revoc_reg_def: dict,
+        write_ledger: bool = True,
+        endorser_did: str = None,
+    ):
+        raise NotImplementedError
 
     async def send_revoc_reg_def(
         self,
@@ -1065,33 +455,7 @@ class BesuVdrLedger(BaseLedger):
         write_ledger: bool = True,
         endorser_did: str = None,
     ) -> dict:
-        """Publish a revocation registry definition to the ledger."""
-        # NOTE - issuer DID could be extracted from the revoc_reg_def ID
-        async with self.profile.session() as session:
-            wallet = session.inject(BaseWallet)
-            if issuer_did:
-                did_info = await wallet.get_local_did(issuer_did)
-            else:
-                did_info = await wallet.get_public_did()
-            del wallet
-        if not did_info:
-            raise LedgerTransactionError(
-                "No issuer DID found for revocation registry definition"
-            )
-        try:
-            request = ledger.build_revoc_reg_def_request(
-                did_info.did, json.dumps(revoc_reg_def)
-            )
-            if endorser_did and not write_ledger:
-                request.set_endorser(endorser_did)
-        except VdrError as err:
-            raise LedgerError(
-                "Exception when sending revocation registry definition"
-            ) from err
-        resp = await self._submit(
-            request, True, sign_did=did_info, write_ledger=write_ledger
-        )
-        return {"result": resp}
+        raise NotImplementedError
 
     async def send_revoc_reg_entry(
         self,
@@ -1102,82 +466,62 @@ class BesuVdrLedger(BaseLedger):
         write_ledger: bool = True,
         endorser_did: str = None,
     ) -> dict:
-        """Publish a revocation registry entry to the ledger."""
-        async with self.profile.session() as session:
-            wallet = session.inject(BaseWallet)
-            if issuer_did:
-                did_info = await wallet.get_local_did(issuer_did)
-            else:
-                did_info = await wallet.get_public_did()
-            del wallet
-        if not did_info:
-            raise LedgerTransactionError(
-                "No issuer DID found for revocation registry entry"
-            )
-        try:
-            request = ledger.build_revoc_reg_entry_request(
-                did_info.did, revoc_reg_id, revoc_def_type, json.dumps(revoc_reg_entry)
-            )
-            if endorser_did and not write_ledger:
-                request.set_endorser(endorser_did)
-        except VdrError as err:
-            raise LedgerError(
-                "Exception when sending revocation registry entry"
-            ) from err
-        resp = await self._submit(
-            request, True, sign_did=did_info, write_ledger=write_ledger
-        )
-        return {"result": resp}
+        raise NotImplementedError
 
-    async def get_wallet_public_did(self) -> DIDInfo:
-        """Fetch the public DID from the wallet."""
-        async with self.profile.session() as session:
-            wallet = session.inject(BaseWallet)
-            return await wallet.get_public_did()
-
-    async def txn_endorse(
+    async def _create_credential_definition_request(
         self,
-        request_json: str,
-        endorse_did: DIDInfo = None,
-    ) -> str:
-        """Endorse (sign) the provided transaction."""
-        try:
-            request = ledger.build_custom_request(request_json)
-        except VdrError as err:
-            raise BadLedgerRequestError("Cannot endorse invalid request") from err
+        public_info: DIDInfo,
+        credential_definition_json: str,
+        write_ledger: bool = True,
+        endorser_did: str = None,
+    ):
+        raise NotImplementedError
 
-        async with self.profile.session() as session:
-            wallet = session.inject(BaseWallet)
-            sign_did = endorse_did if endorse_did else await wallet.get_public_did()
-            if not sign_did:
-                raise BadLedgerRequestError(
-                    "Cannot endorse transaction without a public DID"
-                )
-            request.set_multi_signature(
-                sign_did.did,
-                await wallet.sign_message(request.signature_input, sign_did.verkey),
-            )
-            del wallet
+    async def _create_schema_request(
+        self,
+        public_info: DIDInfo,
+        schema_json: str,
+        write_ledger: bool = True,
+        endorser_did: str = None,
+    ):
+        """Wont need it."""
+        raise NotImplementedError
 
-        return request.body
+    async def get_revoc_reg_entry(
+        self, revoc_reg_id: str, timestamp: int
+    ) -> Tuple[dict, int]:
+        """Not used for anoncreds."""
+        raise NotImplementedError
+
+    async def get_txn_author_agreement(self, reload: bool = False):
+        """Wont be used."""
+        return {"taa_required": False}
+
+    async def fetch_txn_author_agreement(self):
+        """Wont be used."""
+        raise NotImplementedError
+
+    async def accept_txn_author_agreement(
+        self, taa_record: dict, mechanism: str, accept_time: int = None
+    ):
+        """Wont be used."""
+        raise NotImplementedError
+
+    async def get_latest_txn_author_acceptance(self):
+        """Wont be used."""
+        raise NotImplementedError
+
+    async def txn_endorse(self, request_json: str, endorse_did: DIDInfo = None) -> str:
+        """Wont be used."""
+        raise NotImplementedError
 
     async def txn_submit(
         self,
         request_json: str,
         sign: bool,
         taa_accept: bool = None,
-        sign_did: DIDInfo = sentinel,
+        sign_did: DIDInfo = ...,
         write_ledger: bool = True,
     ) -> str:
-        """Write the provided (signed and possibly endorsed) transaction to the ledger."""
-        resp = await self._submit(
-            request_json,
-            sign=sign,
-            taa_accept=taa_accept,
-            sign_did=sign_did,
-            write_ledger=write_ledger,
-        )
-        if write_ledger:
-            # match the format returned by indy sdk
-            resp = {"op": "REPLY", "result": resp}
-        return json.dumps(resp)
+        """Wont be used."""
+        raise NotImplementedError

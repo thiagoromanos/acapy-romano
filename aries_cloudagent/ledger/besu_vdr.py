@@ -4,6 +4,7 @@ from typing import List, Tuple
 
 from web3 import Web3
 from web3.contract.contract import ContractFunction
+from web3.exceptions import ContractCustomError
 from web3.middleware import geth_poa_middleware
 from web3.types import TxReceipt
 
@@ -75,6 +76,12 @@ class BesuVdrLedger(BaseLedger):
         self.cache = cache
         self.profile = profile
         self.cache_duration = cache_duration
+        LOGGER.debug("Loading abis...")
+        self.ledgerConfig.loadConfigs()
+        LOGGER.debug("Initializing web3...")
+        self.web3 = Web3(Web3.HTTPProvider(self.ledgerConfig.ledgerAddr))
+        self.web3.middleware_onion.inject(geth_poa_middleware, layer=0)
+        LOGGER.debug(f"Web3 initialized. Provider addr: {self.ledgerConfig.ledgerAddr}")
 
     def is_ledger_read_only(self) -> bool:
         """If is read-only."""
@@ -87,12 +94,6 @@ class BesuVdrLedger(BaseLedger):
 
     async def __aenter__(self) -> "BesuVdrLedger":
         """Context enter."""
-        LOGGER.debug("Loading abis...")
-        self.ledgerConfig.loadConfigs()
-        LOGGER.debug("Initializing web3...")
-        self.web3 = Web3(Web3.HTTPProvider(self.ledgerConfig.ledgerAddr))
-        self.web3.middleware_onion.inject(geth_poa_middleware, layer=0)
-        LOGGER.debug(f"Web3 initialized. Provider addr: {self.ledgerConfig.ledgerAddr}")
         return self
 
     async def get_schema(self, schema_id: str) -> dict:
@@ -119,6 +120,7 @@ class BesuVdrLedger(BaseLedger):
         schema = None
         try:
             schema_result = contract.functions.resolveSchema(schema_id).call()
+            schema_result = schema_result[0]
             schema = {
                 "ver": "1.0",
                 "id": schema_result[0],
@@ -136,8 +138,8 @@ class BesuVdrLedger(BaseLedger):
                     self.cache_duration,
                 )
 
-        except Exception as ex:
-            raise LedgerError(f"Could not retrieve schema {schema_id}.") from ex
+        except ContractCustomError as ex:
+            LOGGER.error(f"Could not retrieve schema {schema_id} {ex.message}")
         return schema
 
     async def fetch_schema_by_seq_no(self, seq_no: int) -> dict:
@@ -160,9 +162,9 @@ class BesuVdrLedger(BaseLedger):
             credential_definition_id: The schema id of the schema to fetch cred def for
 
         """
-        if self.pool.cache:
+        if self.cache:
             cache_key = f"credential_definition::{credential_definition_id}"
-            async with self.pool.cache.acquire(cache_key) as entry:
+            async with self.cache.acquire(cache_key) as entry:
                 if entry.result:
                     result = entry.result
                 else:
@@ -170,7 +172,7 @@ class BesuVdrLedger(BaseLedger):
                         credential_definition_id
                     )
                     if result:
-                        await entry.set_result(result, self.pool.cache_duration)
+                        await entry.set_result(result, self.cache_duration)
                 return result
 
         return await self.fetch_credential_definition(credential_definition_id)
@@ -182,36 +184,41 @@ class BesuVdrLedger(BaseLedger):
             credential_definition_id: The cred def id of the cred def to fetch
 
         """
-
-        # TODO: use public did
-        address = self.web3.to_checksum_address(
-            self.ledgerConfig.contractAddrs[CREDENTIAL_DEFINITION_REGISTRY]
-        )
-        contract = self.web3.eth.contract(
-            address=address,
-            abi=self.ledgerConfig.contractAddrs[CREDENTIAL_DEFINITION_REGISTRY],
-        )
-
-        cred_def = contract.functions.resolveCredentialDefinition(
-            credential_definition_id
-        ).call()
-
-        if not len(cred_def):
-            raise LedgerError(
-                f"Credential definition not found: {credential_definition_id}",
-                {"ledger_id": "Besu"},
+        result = None
+        try:
+            # TODO: use public did
+            address = self.web3.to_checksum_address(
+                self.ledgerConfig.contractAddrs[CREDENTIAL_DEFINITION_REGISTRY]
+            )
+            contract = self.web3.eth.contract(
+                address=address,
+                abi=self.ledgerConfig.contractAbis[CREDENTIAL_DEFINITION_REGISTRY],
             )
 
-        cred_def = cred_def[0]
-        result = {
-            "id": cred_def[0],
-            "issuerId": cred_def[1],
-            "schemaId": cred_def[2],
-            "type": cred_def[3],
-            "tag": cred_def[4],
-            "value": cred_def[5].replace("'", '"'),
-        }
+            cred_def = contract.functions.resolveCredentialDefinition(
+                credential_definition_id
+            ).call()
 
+            if not len(cred_def):
+                raise LedgerError(
+                    f"Credential definition not found: {credential_definition_id}",
+                    {"ledger_id": "Besu"},
+                )
+
+            cred_def = cred_def[0]
+            result = {
+                "id": cred_def[0],
+                "issuerId": cred_def[1],
+                "schemaId": cred_def[2],
+                "type": cred_def[3],
+                "tag": cred_def[4],
+                "value": cred_def[5].replace("'", '"'),
+            }
+
+        except ContractCustomError as ex:
+            LOGGER.debug(
+                f"Couldn't find cred-def {credential_definition_id}: {ex.message}"
+            )
         return result
 
     async def get_revoc_reg_def(self, revoc_reg_id: str) -> dict:
@@ -383,6 +390,9 @@ class BesuVdrLedger(BaseLedger):
 
         # Wait for transaction receipt
         tx_receipt = self.web3.eth.wait_for_transaction_receipt(send_tx)
+
+        if tx_receipt["status"] == 0:
+            raise LedgerError("Transaction rollback")
 
         return tx_receipt
 

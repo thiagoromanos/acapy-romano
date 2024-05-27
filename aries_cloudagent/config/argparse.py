@@ -2,7 +2,6 @@
 
 import abc
 import json
-
 from functools import reduce
 from itertools import chain
 from os import environ
@@ -10,15 +9,12 @@ from typing import Type
 
 import deepmerge
 import yaml
-
 from configargparse import ArgumentParser, Namespace, YAMLConfigFileParser
 
 from ..utils.tracing import trace_event
-
 from .error import ArgsParseError
-from .util import BoundedInt, ByteSize
-
 from .plugin_settings import PLUGIN_CONFIG_KEY
+from .util import BoundedInt, ByteSize
 
 CAT_PROVISION = "general"
 CAT_START = "start"
@@ -787,13 +783,13 @@ class RevocationGroup(ArgumentGroup):
         if args.notify_revocation:
             settings["revocation.notify"] = args.notify_revocation
         if args.monitor_revocation_notification:
-            settings[
-                "revocation.monitor_notification"
-            ] = args.monitor_revocation_notification
+            settings["revocation.monitor_notification"] = (
+                args.monitor_revocation_notification
+            )
         if args.anoncreds_legacy_revocation:
-            settings[
-                "revocation.anoncreds_legacy_support"
-            ] = args.anoncreds_legacy_revocation
+            settings["revocation.anoncreds_legacy_support"] = (
+                args.anoncreds_legacy_revocation
+            )
         return settings
 
 
@@ -805,56 +801,62 @@ class LedgerGroup(ArgumentGroup):
 
     def add_arguments(self, parser: ArgumentParser):
         """Add ledger-specific command line arguments to the parser."""
-        # for besu 
+        # for besu
         parser.add_argument(
             "--account-address",
             type=str,
             metavar="<account>",
             dest="account_address",
-            env_var="ACCOUNT_ADDRESS",
-            help=(
-                "Specifies the user address from besu"
-            ),
+            env_var="ACAPY_ACCOUNT_ADDRESS",
+            help=("Specifies the user address from besu"),
         )
         parser.add_argument(
             "--private-account-key",
             type=str,
             metavar="<account>",
             dest="private_account_key",
-            env_var="PRIVATE_ACCOUNT_KEY",
-            help=(
-                "Specifies the user account private key"
-            ),
+            env_var="ACAPY_PRIVATE_ACCOUNT_KEY",
+            help=("Specifies the user account private key"),
         )
         parser.add_argument(
             "--besu-provider-url",
             type=str,
             metavar="<besu>",
             dest="besu_provider_url",
-            env_var="BESU_PROVIDER_URL",
-            help=(
-                "Specifies the url of the besu provider "
-            ),
+            env_var="ACAPY_BESU_PROVIDER_URL",
+            help=("Specifies the url of the besu provider "),
+        )
+        parser.add_argument(
+            "--did-contract-address",
+            type=str,
+            metavar="<account>",
+            dest="did_contract_address",
+            env_var="ACAPY_DID_CONTRACT_ADDRESS",
+            help=("Specifies the DID registry contract address"),
         )
         parser.add_argument(
             "--schema-contract-address",
             type=str,
             metavar="<contract>",
             dest="schema_contract_address",
-            env_var="SCHEMA_CONTRACT_ADDRESS",
-            help=(
-                "Specifies the schema contract address"
-            ),
+            env_var="ACAPY_SCHEMA_CONTRACT_ADDRESS",
+            help=("Specifies the schema contract address"),
         )
         parser.add_argument(
             "--credef-contract-address",
             type=str,
             metavar="<contract>",
             dest="credef_contract_address",
-            env_var="CREDF_CONTRACT_ADDRESS",
-            help=(
-                "Specifies the credf contract address"
-            ),
+            env_var="ACAPY_CREDF_CONTRACT_ADDRESS",
+            help=("Specifies the credf contract address"),
+        )
+        parser.add_argument(
+            "--revocation-contract-address",
+            type=str,
+            metavar="<account>",
+            dest="revocation_contract_address",
+            env_var="ACAPY_REVOCATION_CONTRACT_ADDRESS",
+            help=("Specifies the revocation contract address"),
         )
         parser.add_argument(
             "--ledger-pool-name",
@@ -960,15 +962,19 @@ class LedgerGroup(ArgumentGroup):
     def get_settings(self, args: Namespace) -> dict:
         """Extract ledger settings."""
         settings = {}
-        settings["ledger.schema_contract_address"] = args.schema_contract_address
-        settings["ledger.besu_provider_url"] = args.besu_provider_url
-        settings["ledger.credef_contract_address"] = args.credef_contract_address
-        settings["ledger.private_account_key"] = args.private_account_key
-        settings["ledger.account_address"] = args.account_address
-        settings["ledger.revocation_contract_address"] = args.revocation_contract_address
 
         if args.no_ledger:
             settings["ledger.disabled"] = True
+        elif args.besu_provider_url:
+            settings["ledger.besu_provider_url"] = args.besu_provider_url
+            settings["ledger.private_account_key"] = args.private_account_key
+            settings["ledger.account_address"] = args.account_address
+            settings["ledger.did_contract_address"] = args.did_contract_address
+            settings["ledger.schema_contract_address"] = args.schema_contract_address
+            settings["ledger.credef_contract_address"] = args.credef_contract_address
+            settings["ledger.revocation_contract_address"] = (
+                args.revocation_contract_address
+            )
         else:
             single_configured = False
             multi_configured = False
@@ -1026,7 +1032,6 @@ class LedgerGroup(ArgumentGroup):
             if args.accept_taa:
                 settings["ledger.taa_acceptance_mechanism"] = args.accept_taa[0]
                 settings["ledger.taa_acceptance_version"] = args.accept_taa[1]
-                
 
         return settings
 
@@ -1862,9 +1867,9 @@ class MultitenantGroup(ArgumentGroup):
                         )
 
                     if multitenancy_config.get("key_derivation_method"):
-                        settings[
-                            "multitenant.key_derivation_method"
-                        ] = multitenancy_config.get("key_derivation_method")
+                        settings["multitenant.key_derivation_method"] = (
+                            multitenancy_config.get("key_derivation_method")
+                        )
 
                 else:
                     for value_str in args.multitenancy_config:
@@ -2012,9 +2017,9 @@ class EndorsementGroup(ArgumentGroup):
 
         if args.endorser_endorse_with_did:
             if settings["endorser.endorser"]:
-                settings[
-                    "endorser.endorser_endorse_with_did"
-                ] = args.endorser_endorse_with_did
+                settings["endorser.endorser_endorse_with_did"] = (
+                    args.endorser_endorse_with_did
+                )
             else:
                 raise ArgsParseError(
                     "Parameter --endorser-endorse-with-did should only be set for "

@@ -437,6 +437,8 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
                         f"ledger but not in wallet {profile.name}",
                         cred_def_id,
                     ) from err
+            except LedgerError as err1:
+                raise AnonCredsRegistrationError("Something bad happened") from err1
 
             return CredDefResult(
                 job_id=None,

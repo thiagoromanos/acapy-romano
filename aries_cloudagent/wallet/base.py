@@ -6,7 +6,7 @@ from typing import List, Optional, Sequence, Tuple, Union
 from ..ledger.base import BaseLedger
 from ..ledger.endpoint_type import EndpointType
 from .did_info import DIDInfo, KeyInfo
-from .did_method import SOV, DIDMethod
+from .did_method import INDY2, SOV, DIDMethod
 from .error import WalletError
 from .key_type import KeyType
 
@@ -265,7 +265,7 @@ class BaseWallet(ABC):
         """
         did_info = await self.get_local_did(did)
 
-        if did_info.method != SOV:
+        if did_info.method != SOV and did_info.method != INDY2:
             raise WalletError("Setting DID endpoint is only allowed for did:sov DIDs")
         metadata = {**did_info.metadata}
         if not endpoint_type:

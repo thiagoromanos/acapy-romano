@@ -827,11 +827,11 @@ class LedgerGroup(ArgumentGroup):
             help=("Specifies the url of the besu provider "),
         )
         parser.add_argument(
-            "--did-contract-address",
+            "--indy-did-contract-address",
             type=str,
             metavar="<account>",
-            dest="did_contract_address",
-            env_var="ACAPY_DID_CONTRACT_ADDRESS",
+            dest="indy_did_contract_address",
+            env_var="ACAPY_INDY_DID_CONTRACT_ADDRESS",
             help=("Specifies the DID registry contract address"),
         )
         parser.add_argument(
@@ -969,11 +969,13 @@ class LedgerGroup(ArgumentGroup):
             settings["ledger.besu_provider_url"] = args.besu_provider_url
             settings["ledger.private_account_key"] = args.private_account_key
             settings["ledger.account_address"] = args.account_address
-            settings["ledger.did_contract_address"] = args.did_contract_address
             settings["ledger.schema_contract_address"] = args.schema_contract_address
             settings["ledger.credef_contract_address"] = args.credef_contract_address
             settings["ledger.revocation_contract_address"] = (
                 args.revocation_contract_address
+            )
+            settings["ledger.indy_did_contract_address"] = (
+                args.indy_did_contract_address
             )
         else:
             single_configured = False

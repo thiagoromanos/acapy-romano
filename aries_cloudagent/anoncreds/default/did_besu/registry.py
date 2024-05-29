@@ -173,6 +173,7 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
     @staticmethod
     def make_schema_id(schema: AnonCredsSchema) -> str:
         """Derive the ID for a schema."""
+        # https://hyperledger.github.io/indy-did-method/#schema
         return f"{schema.issuer_id}/anoncreds/v0/SCHEMA/{schema.name}/{schema.version}"
 
     @staticmethod
@@ -181,27 +182,16 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         cred_def: CredDef,
     ) -> str:
         """Derive the ID for a credential definition."""
-        signature_type = cred_def.type or DEFAULT_SIGNATURE_TYPE
+        # https://hyperledger.github.io/indy-did-method/#cred-def
         tag = cred_def.tag or DEFAULT_CRED_DEF_TAG
-
-        # try:
-        #     seq_no = str(schema.schema_metadata["seqNo"])
-        # except KeyError as err:
-        #     raise AnonCredsRegistrationError(
-        #         "Legacy Indy only supports schemas from BESU"
-        #     ) from err
-        # "{issuerId}/anoncreds/v0/CLAIM_DEF/${schemaId}/${tag}"
         return f"{cred_def.issuer_id}/anoncreds/v0/CLAIM_DEF/{schema.schema_id}/{tag}"
 
     @staticmethod
     def make_rev_reg_def_id(rev_reg_def: RevRegDef) -> str:
         """Derive the ID for a revocation registry definition."""
-        # return (
-        #     f"{rev_reg_def.issuer_id}/anoncreds/v0/REV_REG/{rev_reg_def.cred_def_id}/"
-        #     f"{rev_reg_def.type}/{rev_reg_def.tag}"
-        # )
+        # https://hyperledger.github.io/indy-did-method/#revocation-registry-definition
         return (
-            f"{rev_reg_def.issuer_id}/anoncreds/v0/REV_REG/{rev_reg_def.cred_def_id}:"
+            f"{rev_reg_def.issuer_id}/anoncreds/v0/REV_REG_DEF/{rev_reg_def.cred_def_id}:"
             f"{rev_reg_def.type}:{rev_reg_def.tag}"
         )
 
@@ -250,10 +240,27 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
 
         return result
 
+    async def send_transaction_tx(self, call_function) -> TxReceipt:
+        """DEPRECATED."""
+        # FIXME: remove me
+        # Sign transaction
+        signed_tx = self.web3.eth.account.sign_transaction(
+            call_function, private_key=self.PKEY
+        )
+
+        # Send transaction
+        LOGGER.debug("Transaction: %s", signed_tx.rawTransaction)
+        send_tx = self.web3.eth.send_raw_transaction(signed_tx.rawTransaction)
+
+        # Wait for transaction receipt
+        tx_receipt = self.web3.eth.wait_for_transaction_receipt(send_tx)
+
+        return tx_receipt
+
     async def register_revocation(
         self, revocation_id: str, issuer_id: str, credDef_id: str
     ) -> TxReceipt:
-        """Register a revocation on the registry. (BETA)"""
+        """Register a revocation on the registry. (BETA)."""
         LOGGER.debug(f"Registering revocation: {revocation_id}")
         rev_json = {"id": revocation_id, "issuerId": issuer_id, "credDefId": credDef_id}
         abi = json.loads(REVOCATION_REGISTRY_ABI)
@@ -455,22 +462,22 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
                 },
             )
 
-        abi = json.loads(CRED_DEF_REGISTRY_ABI)
-        address = self.web3.to_checksum_address(self.CRED_DEF_REGISTRY_ADDRESS)
-        contract = self.web3.eth.contract(address=address, abi=abi)
-        Chain_id = self.web3.eth.chain_id
-        nonce = self.web3.eth.get_transaction_count(self.ACCOUNT)
-        LOGGER.debug(">>> : %s %s %s ", Chain_id, nonce, self.ACCOUNT)
-        call_function = contract.functions.createCredentialDefinition(
-            indy_cred_def
-        ).build_transaction({"chainId": Chain_id, "from": self.ACCOUNT, "nonce": nonce})
-        tx_receipt = await self.send_transaction_tx(call_function)
-        # receipt = contract.functions.createCredentialDefinition(indy_cred_def).transact({"from": self.ACCOUNT})
-        LOGGER.debug("Receipt: %s", tx_receipt)
-        result = contract.functions.resolveCredentialDefinition(cred_def_id).call()
-        if not len(result):
-            raise AnonCredsRegistrationError("Failed to register credef")
-        LOGGER.debug(f"Result >>> { result[0]}")
+        # abi = json.loads(CRED_DEF_REGISTRY_ABI)
+        # address = self.web3.to_checksum_address(self.CRED_DEF_REGISTRY_ADDRESS)
+        # contract = self.web3.eth.contract(address=address, abi=abi)
+        # Chain_id = self.web3.eth.chain_id
+        # nonce = self.web3.eth.get_transaction_count(self.ACCOUNT)
+        # LOGGER.debug(">>> : %s %s %s ", Chain_id, nonce, self.ACCOUNT)
+        # call_function = contract.functions.createCredentialDefinition(
+        #     indy_cred_def
+        # ).build_transaction({"chainId": Chain_id, "from": self.ACCOUNT, "nonce": nonce})
+        # tx_receipt = await self.send_transaction_tx(call_function)
+        # # receipt = contract.functions.createCredentialDefinition(indy_cred_def).transact({"from": self.ACCOUNT})
+        # LOGGER.debug("Receipt: %s", tx_receipt)
+        # result = contract.functions.resolveCredentialDefinition(cred_def_id).call()
+        # if not len(result):
+        #     raise AnonCredsRegistrationError("Failed to register credef")
+        # LOGGER.debug(f"Result >>> { result[0]}")
         # try:
         #     # async with ledger:
         #     seq_no = ledger.send_credential_definition_anoncreds(
@@ -499,20 +506,20 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         #         "Failed to register credential definition"
         #     ) from err
 
-        return CredDefResult(
-            job_id=None,
-            credential_definition_state=CredDefState(
-                state=CredDefState.STATE_FINISHED,
-                credential_definition_id=cred_def_id,
-                credential_definition=credential_definition,
-            ),
-            registration_metadata={},
-            credential_definition_metadata={
-                "issuerId": "",
-                "seqNo": "besu",
-                **(options or {}),
-            },
-        )
+        # return CredDefResult(
+        #     job_id=None,
+        #     credential_definition_state=CredDefState(
+        #         state=CredDefState.STATE_FINISHED,
+        #         credential_definition_id=cred_def_id,
+        #         credential_definition=credential_definition,
+        #     ),
+        #     registration_metadata={},
+        #     credential_definition_metadata={
+        #         "issuerId": "",
+        #         "seqNo": "besu",
+        #         **(options or {}),
+        #     },
+        # )
 
     async def get_revocation_registry_definition(
         self, profile: Profile, rev_reg_def_id: str

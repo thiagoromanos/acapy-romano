@@ -9,6 +9,7 @@ from web3.middleware import geth_poa_middleware
 from web3.types import TxReceipt
 
 from aries_cloudagent.wallet.base import BaseWallet
+from aries_cloudagent.wallet.did_method import INDY2
 
 from ..cache.base import BaseCache
 from ..core.profile import Profile
@@ -22,6 +23,7 @@ LOGGER = logging.getLogger(__name__)
 CREDENTIAL_DEFINITION_REGISTRY = "CredentialDefinitionRegistry"
 SCHEMA_REGISTRY = "SchemaRegistry"
 REVOCATION_REGISTRY = "RevocationRegistry"
+INDY_DID_REGISTRY = "IndyDidRegistry"
 
 
 class BesuVDRWeb3Config:
@@ -44,7 +46,7 @@ class BesuVDRWeb3Config:
     @property
     def read_only(self) -> bool:
         """If the access is readOnly."""
-        return self.trusteeAccount and self.trusteePKey
+        return not self.trusteeAccount or not self.trusteePKey
 
     def loadConfigs(self):
         """Load the abis (TODO: load from file)."""
@@ -56,6 +58,9 @@ class BesuVDRWeb3Config:
         )
         self.contractAbis[REVOCATION_REGISTRY] = json.loads(
             '[{"inputs":[{"internalType":"address","name":"target","type":"address"}],"name":"AddressEmptyCode","type":"error"},{"inputs":[{"internalType":"address","name":"implementation","type":"address"}],"name":"ERC1967InvalidImplementation","type":"error"},{"inputs":[],"name":"ERC1967NonPayable","type":"error"},{"inputs":[],"name":"FailedInnerCall","type":"error"},{"inputs":[],"name":"InvalidInitialization","type":"error"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"InvalidIssuerId","type":"error"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"IssuerHasBeenDeactivated","type":"error"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"IssuerNotFound","type":"error"},{"inputs":[],"name":"NotInitializing","type":"error"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"RevocationAlreadyExist","type":"error"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"RevocationNotFound","type":"error"},{"inputs":[{"internalType":"address","name":"sender","type":"address"},{"internalType":"address","name":"creator","type":"address"}],"name":"SenderIsNotCreator","type":"error"},{"inputs":[{"internalType":"address","name":"sender","type":"address"},{"internalType":"address","name":"owner","type":"address"}],"name":"SenderIsNotIssuerDidOwner","type":"error"},{"inputs":[],"name":"UUPSUnauthorizedCallContext","type":"error"},{"inputs":[{"internalType":"bytes32","name":"slot","type":"bytes32"}],"name":"UUPSUnsupportedProxiableUUID","type":"error"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"string","name":"RevocationId","type":"string"},{"indexed":true,"internalType":"address","name":"sender","type":"address"}],"name":"CredentialRevoked","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"string","name":"RevocationId","type":"string"},{"indexed":true,"internalType":"address","name":"sender","type":"address"}],"name":"CredentialUnrevoked","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"uint64","name":"version","type":"uint64"}],"name":"Initialized","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"string","name":"RevRegId","type":"string"},{"indexed":true,"internalType":"address","name":"sender","type":"address"}],"name":"RevListCreated","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"string","name":"RevocationId","type":"string"},{"indexed":true,"internalType":"address","name":"sender","type":"address"}],"name":"RevocationCreated","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"implementation","type":"address"}],"name":"Upgraded","type":"event"},{"inputs":[],"name":"UPGRADE_INTERFACE_VERSION","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[{"components":[{"internalType":"string","name":"revDefId","type":"string"},{"internalType":"string","name":"regDefType","type":"string"},{"internalType":"string","name":"entry","type":"string"},{"internalType":"string","name":"issuerId","type":"string"}],"internalType":"struct RevocationRegEntry","name":"revEntry","type":"tuple"}],"name":"createOrUpdateEntry","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"issuerId","type":"string"},{"internalType":"string","name":"credDefId","type":"string"}],"internalType":"struct Revocation","name":"_revocation","type":"tuple"}],"name":"createRevocation","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"components":[{"internalType":"string","name":"ver","type":"string"},{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"revocDefType","type":"string"},{"internalType":"string","name":"credDefId","type":"string"},{"internalType":"string","name":"tag","type":"string"},{"internalType":"string","name":"value","type":"string"},{"internalType":"string","name":"issuerId","type":"string"}],"internalType":"struct RevocationReg","name":"revRegistry","type":"tuple"}],"name":"createRevocationRegistry","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"upgradeControlAddress","type":"address"},{"internalType":"address","name":"didResolverAddress","type":"address"},{"internalType":"address","name":"credDefRegistryAddress","type":"address"}],"name":"initialize","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"proxiableUUID","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"resolveEntry","outputs":[{"components":[{"components":[{"internalType":"string","name":"revDefId","type":"string"},{"internalType":"string","name":"regDefType","type":"string"},{"internalType":"string","name":"entry","type":"string"},{"internalType":"string","name":"issuerId","type":"string"}],"internalType":"struct RevocationRegEntry","name":"revEntry","type":"tuple"},{"components":[{"internalType":"uint256","name":"created","type":"uint256"},{"internalType":"address","name":"creator","type":"address"},{"internalType":"uint256","name":"updated","type":"uint256"}],"internalType":"struct RevocationEntryMetadata","name":"metadata","type":"tuple"}],"internalType":"struct RevocationEntryWithMetadata","name":"revEntryMetadata","type":"tuple"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"resolveRevocation","outputs":[{"components":[{"components":[{"internalType":"string","name":"ver","type":"string"},{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"revocDefType","type":"string"},{"internalType":"string","name":"credDefId","type":"string"},{"internalType":"string","name":"tag","type":"string"},{"internalType":"string","name":"value","type":"string"},{"internalType":"string","name":"issuerId","type":"string"}],"internalType":"struct RevocationReg","name":"revocationReg","type":"tuple"},{"components":[{"internalType":"uint256","name":"created","type":"uint256"},{"internalType":"address","name":"creator","type":"address"},{"internalType":"uint256","name":"updated","type":"uint256"}],"internalType":"struct RevocationRegMetadata","name":"metadata","type":"tuple"}],"internalType":"struct RevocationRegWithMetadata","name":"revWithMetadata","type":"tuple"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"revokeCredential","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"newImplementation","type":"address"},{"internalType":"bytes","name":"data","type":"bytes"}],"name":"upgradeToAndCall","outputs":[],"stateMutability":"payable","type":"function"}]'
+        )
+        self.contractAbis[INDY_DID_REGISTRY] = json.loads(
+            '[{"inputs":[{"internalType":"address","name":"target","type":"address"}],"name":"AddressEmptyCode","type":"error"},{"inputs":[{"internalType":"string","name":"did","type":"string"}],"name":"DidAlreadyExist","type":"error"},{"inputs":[{"internalType":"string","name":"did","type":"string"}],"name":"DidHasBeenDeactivated","type":"error"},{"inputs":[{"internalType":"string","name":"did","type":"string"}],"name":"DidNotFound","type":"error"},{"inputs":[{"internalType":"address","name":"implementation","type":"address"}],"name":"ERC1967InvalidImplementation","type":"error"},{"inputs":[],"name":"ERC1967NonPayable","type":"error"},{"inputs":[],"name":"FailedInnerCall","type":"error"},{"inputs":[],"name":"InvalidInitialization","type":"error"},{"inputs":[],"name":"NotInitializing","type":"error"},{"inputs":[{"internalType":"address","name":"sender","type":"address"},{"internalType":"address","name":"creator","type":"address"}],"name":"SenderIsNotCreator","type":"error"},{"inputs":[],"name":"UUPSUnauthorizedCallContext","type":"error"},{"inputs":[{"internalType":"bytes32","name":"slot","type":"bytes32"}],"name":"UUPSUnsupportedProxiableUUID","type":"error"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"string","name":"did","type":"string"}],"name":"DIDCreated","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"string","name":"did","type":"string"}],"name":"DIDDeactivated","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"string","name":"did","type":"string"}],"name":"DIDUpdated","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"uint64","name":"version","type":"uint64"}],"name":"Initialized","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"implementation","type":"address"}],"name":"Upgraded","type":"event"},{"inputs":[],"name":"UPGRADE_INTERFACE_VERSION","outputs":[{"internalType":"string","name":"","type":"string"}],"stateMutability":"view","type":"function"},{"inputs":[{"components":[{"internalType":"string[]","name":"context","type":"string[]"},{"internalType":"string","name":"id","type":"string"},{"internalType":"string[]","name":"controller","type":"string[]"},{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"verificationMethodType","type":"string"},{"internalType":"string","name":"controller","type":"string"},{"internalType":"string","name":"publicKeyJwk","type":"string"},{"internalType":"string","name":"publicKeyMultibase","type":"string"}],"internalType":"struct VerificationMethod[]","name":"verificationMethod","type":"tuple[]"},{"components":[{"internalType":"string","name":"id","type":"string"},{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"verificationMethodType","type":"string"},{"internalType":"string","name":"controller","type":"string"},{"internalType":"string","name":"publicKeyJwk","type":"string"},{"internalType":"string","name":"publicKeyMultibase","type":"string"}],"internalType":"struct VerificationMethod","name":"verificationMethod","type":"tuple"}],"internalType":"struct VerificationRelationship[]","name":"authentication","type":"tuple[]"},{"components":[{"internalType":"string","name":"id","type":"string"},{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"verificationMethodType","type":"string"},{"internalType":"string","name":"controller","type":"string"},{"internalType":"string","name":"publicKeyJwk","type":"string"},{"internalType":"string","name":"publicKeyMultibase","type":"string"}],"internalType":"struct VerificationMethod","name":"verificationMethod","type":"tuple"}],"internalType":"struct VerificationRelationship[]","name":"assertionMethod","type":"tuple[]"},{"components":[{"internalType":"string","name":"id","type":"string"},{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"verificationMethodType","type":"string"},{"internalType":"string","name":"controller","type":"string"},{"internalType":"string","name":"publicKeyJwk","type":"string"},{"internalType":"string","name":"publicKeyMultibase","type":"string"}],"internalType":"struct VerificationMethod","name":"verificationMethod","type":"tuple"}],"internalType":"struct VerificationRelationship[]","name":"capabilityInvocation","type":"tuple[]"},{"components":[{"internalType":"string","name":"id","type":"string"},{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"verificationMethodType","type":"string"},{"internalType":"string","name":"controller","type":"string"},{"internalType":"string","name":"publicKeyJwk","type":"string"},{"internalType":"string","name":"publicKeyMultibase","type":"string"}],"internalType":"struct VerificationMethod","name":"verificationMethod","type":"tuple"}],"internalType":"struct VerificationRelationship[]","name":"capabilityDelegation","type":"tuple[]"},{"components":[{"internalType":"string","name":"id","type":"string"},{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"verificationMethodType","type":"string"},{"internalType":"string","name":"controller","type":"string"},{"internalType":"string","name":"publicKeyJwk","type":"string"},{"internalType":"string","name":"publicKeyMultibase","type":"string"}],"internalType":"struct VerificationMethod","name":"verificationMethod","type":"tuple"}],"internalType":"struct VerificationRelationship[]","name":"keyAgreement","type":"tuple[]"},{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"serviceType","type":"string"},{"internalType":"string","name":"serviceEndpoint","type":"string"},{"internalType":"string[]","name":"accept","type":"string[]"},{"internalType":"string[]","name":"routingKeys","type":"string[]"}],"internalType":"struct Service[]","name":"service","type":"tuple[]"},{"internalType":"string[]","name":"alsoKnownAs","type":"string[]"}],"internalType":"struct DidDocument","name":"document","type":"tuple"}],"name":"createDid","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"deactivateDid","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"upgradeControlAddress","type":"address"}],"name":"initialize","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"proxiableUUID","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"string","name":"id","type":"string"}],"name":"resolveDid","outputs":[{"components":[{"components":[{"internalType":"string[]","name":"context","type":"string[]"},{"internalType":"string","name":"id","type":"string"},{"internalType":"string[]","name":"controller","type":"string[]"},{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"verificationMethodType","type":"string"},{"internalType":"string","name":"controller","type":"string"},{"internalType":"string","name":"publicKeyJwk","type":"string"},{"internalType":"string","name":"publicKeyMultibase","type":"string"}],"internalType":"struct VerificationMethod[]","name":"verificationMethod","type":"tuple[]"},{"components":[{"internalType":"string","name":"id","type":"string"},{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"verificationMethodType","type":"string"},{"internalType":"string","name":"controller","type":"string"},{"internalType":"string","name":"publicKeyJwk","type":"string"},{"internalType":"string","name":"publicKeyMultibase","type":"string"}],"internalType":"struct VerificationMethod","name":"verificationMethod","type":"tuple"}],"internalType":"struct VerificationRelationship[]","name":"authentication","type":"tuple[]"},{"components":[{"internalType":"string","name":"id","type":"string"},{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"verificationMethodType","type":"string"},{"internalType":"string","name":"controller","type":"string"},{"internalType":"string","name":"publicKeyJwk","type":"string"},{"internalType":"string","name":"publicKeyMultibase","type":"string"}],"internalType":"struct VerificationMethod","name":"verificationMethod","type":"tuple"}],"internalType":"struct VerificationRelationship[]","name":"assertionMethod","type":"tuple[]"},{"components":[{"internalType":"string","name":"id","type":"string"},{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"verificationMethodType","type":"string"},{"internalType":"string","name":"controller","type":"string"},{"internalType":"string","name":"publicKeyJwk","type":"string"},{"internalType":"string","name":"publicKeyMultibase","type":"string"}],"internalType":"struct VerificationMethod","name":"verificationMethod","type":"tuple"}],"internalType":"struct VerificationRelationship[]","name":"capabilityInvocation","type":"tuple[]"},{"components":[{"internalType":"string","name":"id","type":"string"},{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"verificationMethodType","type":"string"},{"internalType":"string","name":"controller","type":"string"},{"internalType":"string","name":"publicKeyJwk","type":"string"},{"internalType":"string","name":"publicKeyMultibase","type":"string"}],"internalType":"struct VerificationMethod","name":"verificationMethod","type":"tuple"}],"internalType":"struct VerificationRelationship[]","name":"capabilityDelegation","type":"tuple[]"},{"components":[{"internalType":"string","name":"id","type":"string"},{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"verificationMethodType","type":"string"},{"internalType":"string","name":"controller","type":"string"},{"internalType":"string","name":"publicKeyJwk","type":"string"},{"internalType":"string","name":"publicKeyMultibase","type":"string"}],"internalType":"struct VerificationMethod","name":"verificationMethod","type":"tuple"}],"internalType":"struct VerificationRelationship[]","name":"keyAgreement","type":"tuple[]"},{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"serviceType","type":"string"},{"internalType":"string","name":"serviceEndpoint","type":"string"},{"internalType":"string[]","name":"accept","type":"string[]"},{"internalType":"string[]","name":"routingKeys","type":"string[]"}],"internalType":"struct Service[]","name":"service","type":"tuple[]"},{"internalType":"string[]","name":"alsoKnownAs","type":"string[]"}],"internalType":"struct DidDocument","name":"document","type":"tuple"},{"components":[{"internalType":"address","name":"creator","type":"address"},{"internalType":"uint256","name":"created","type":"uint256"},{"internalType":"uint256","name":"updated","type":"uint256"},{"internalType":"bool","name":"deactivated","type":"bool"}],"internalType":"struct DidMetadata","name":"metadata","type":"tuple"}],"internalType":"struct DidDocumentStorage","name":"didDocumentStorage","type":"tuple"}],"stateMutability":"view","type":"function"},{"inputs":[{"components":[{"internalType":"string[]","name":"context","type":"string[]"},{"internalType":"string","name":"id","type":"string"},{"internalType":"string[]","name":"controller","type":"string[]"},{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"verificationMethodType","type":"string"},{"internalType":"string","name":"controller","type":"string"},{"internalType":"string","name":"publicKeyJwk","type":"string"},{"internalType":"string","name":"publicKeyMultibase","type":"string"}],"internalType":"struct VerificationMethod[]","name":"verificationMethod","type":"tuple[]"},{"components":[{"internalType":"string","name":"id","type":"string"},{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"verificationMethodType","type":"string"},{"internalType":"string","name":"controller","type":"string"},{"internalType":"string","name":"publicKeyJwk","type":"string"},{"internalType":"string","name":"publicKeyMultibase","type":"string"}],"internalType":"struct VerificationMethod","name":"verificationMethod","type":"tuple"}],"internalType":"struct VerificationRelationship[]","name":"authentication","type":"tuple[]"},{"components":[{"internalType":"string","name":"id","type":"string"},{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"verificationMethodType","type":"string"},{"internalType":"string","name":"controller","type":"string"},{"internalType":"string","name":"publicKeyJwk","type":"string"},{"internalType":"string","name":"publicKeyMultibase","type":"string"}],"internalType":"struct VerificationMethod","name":"verificationMethod","type":"tuple"}],"internalType":"struct VerificationRelationship[]","name":"assertionMethod","type":"tuple[]"},{"components":[{"internalType":"string","name":"id","type":"string"},{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"verificationMethodType","type":"string"},{"internalType":"string","name":"controller","type":"string"},{"internalType":"string","name":"publicKeyJwk","type":"string"},{"internalType":"string","name":"publicKeyMultibase","type":"string"}],"internalType":"struct VerificationMethod","name":"verificationMethod","type":"tuple"}],"internalType":"struct VerificationRelationship[]","name":"capabilityInvocation","type":"tuple[]"},{"components":[{"internalType":"string","name":"id","type":"string"},{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"verificationMethodType","type":"string"},{"internalType":"string","name":"controller","type":"string"},{"internalType":"string","name":"publicKeyJwk","type":"string"},{"internalType":"string","name":"publicKeyMultibase","type":"string"}],"internalType":"struct VerificationMethod","name":"verificationMethod","type":"tuple"}],"internalType":"struct VerificationRelationship[]","name":"capabilityDelegation","type":"tuple[]"},{"components":[{"internalType":"string","name":"id","type":"string"},{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"verificationMethodType","type":"string"},{"internalType":"string","name":"controller","type":"string"},{"internalType":"string","name":"publicKeyJwk","type":"string"},{"internalType":"string","name":"publicKeyMultibase","type":"string"}],"internalType":"struct VerificationMethod","name":"verificationMethod","type":"tuple"}],"internalType":"struct VerificationRelationship[]","name":"keyAgreement","type":"tuple[]"},{"components":[{"internalType":"string","name":"id","type":"string"},{"internalType":"string","name":"serviceType","type":"string"},{"internalType":"string","name":"serviceEndpoint","type":"string"},{"internalType":"string[]","name":"accept","type":"string[]"},{"internalType":"string[]","name":"routingKeys","type":"string[]"}],"internalType":"struct Service[]","name":"service","type":"tuple[]"},{"internalType":"string[]","name":"alsoKnownAs","type":"string[]"}],"internalType":"struct DidDocument","name":"document","type":"tuple"}],"name":"updateDid","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"newImplementation","type":"address"},{"internalType":"bytes","name":"data","type":"bytes"}],"name":"upgradeToAndCall","outputs":[],"stateMutability":"payable","type":"function"}]'
         )
 
 
@@ -359,7 +364,7 @@ class BesuVdrLedger(BaseLedger):
             abi=self.ledgerConfig.contractAbis[CREDENTIAL_DEFINITION_REGISTRY],
         )
         call_function = contract.functions.createCredentialDefinition(cred_def)
-        tx_receipt = self._send_signed_transaction(call_function)
+        tx_receipt = self._send_signed_transaction(call_function, False)
         LOGGER.debug("Receipt: %s", tx_receipt)
 
         result = self.fetch_credential_definition(cred_def_id)
@@ -368,17 +373,19 @@ class BesuVdrLedger(BaseLedger):
 
         return "besu"
 
-    def _send_signed_transaction(self, contractFunction: ContractFunction) -> TxReceipt:
+    def _send_signed_transaction(
+        self, contractFunction: ContractFunction, includeGasInTx: bool = True
+    ) -> TxReceipt:
         nonce = self.web3.eth.get_transaction_count(self.ledgerConfig.trusteeAccount)
         chain_id = self.web3.eth.chain_id
-        tx = contractFunction.build_transaction(
-            {
-                "chainId": chain_id,
-                "from": self.ledgerConfig.trusteeAccount,
-                "nonce": nonce,
-                "gas": 3000000,
-            }
-        )
+        txParams = {
+            "chainId": chain_id,
+            "from": self.ledgerConfig.trusteeAccount,
+            "nonce": nonce,
+        }
+        if includeGasInTx:
+            txParams["gas"] = 3000000
+        tx = contractFunction.build_transaction(txParams)
         # Sign transaction
         signed_tx = self.web3.eth.account.sign_transaction(
             tx, private_key=self.ledgerConfig.trusteePKey
@@ -396,18 +403,32 @@ class BesuVdrLedger(BaseLedger):
 
         return tx_receipt
 
+    async def _getFullDid(self, did):
+        async with self.profile.session() as session:
+            wallet = session.inject(BaseWallet)
+            didInfo = await wallet.get_local_did(did)
+
+        didNs = ":indy_besu" if didInfo.method == INDY2 else ""
+        fullDid = f"did:{didInfo.method.method_name}{didNs}:{did}"
+        return fullDid
+
     async def get_key_for_did(self, did: str) -> str:
         """Get key for did."""
         LOGGER.info(f"Getting key for did {did}")
-        raise NotImplementedError
 
-    async def get_endpoint_for_did(
-        self, did: str, endpoint_type: EndpointType = EndpointType.ENDPOINT
-    ) -> str:
-        raise NotImplementedError
+        fullDid = await self._getFullDid(did)
+        address = self.web3.to_checksum_address(
+            self.ledgerConfig.contractAddrs[INDY_DID_REGISTRY]
+        )
+        contract = self.web3.eth.contract(
+            address=address, abi=self.ledgerConfig.contractAbis[INDY_DID_REGISTRY]
+        )
+        didDocStorage = contract.functions.resolveDid(fullDid).call()
+        didDoc = didDocStorage[0]
+        LOGGER.debug(f"Got this diddoc: {didDoc}")
+        key = didDoc[3][0][4]
 
-    async def get_all_endpoints_for_did(self, did: str) -> dict:
-        raise NotImplementedError
+        return key
 
     async def update_endpoint_for_did(
         self,
@@ -418,10 +439,155 @@ class BesuVdrLedger(BaseLedger):
         endorser_did: str = None,
         routing_keys: List[str] = None,
     ) -> bool:
+
         LOGGER.info(
             f"Trying to update did {did} setting endpoint to {endpoint}. That's not "
             "implemented yet"
         )
+
+        fullDid = await self._getFullDid(did)
+        address = self.web3.to_checksum_address(
+            self.ledgerConfig.contractAddrs[INDY_DID_REGISTRY]
+        )
+        contract = self.web3.eth.contract(
+            address=address, abi=self.ledgerConfig.contractAbis[INDY_DID_REGISTRY]
+        )
+        didDocStorage = contract.functions.resolveDid(fullDid).call()
+        didDoc = didDocStorage[0]
+
+        self.didDocDictFromTuple(didDoc)
+
+        raise NotImplementedError
+
+    def _didDocDictFromTuple(self, didDoc) -> dict:
+        context = []
+        for x in didDoc[0]:
+            context.append(x)
+        controller = []
+        for x in didDoc[2]:
+            controller.append(x)
+        verificationMethod = []
+        for x in didDoc[3]:
+            verificationMethod.append(
+                {
+                    "id": x[0],
+                    "verificationMethodType": x[1],
+                    "controller": x[2],
+                    "publicKeyJwk": x[3],
+                    "publicKeyMultibase": x[4],
+                }
+            )
+        authentication = []
+        for x in didDoc[4]:
+            authentication.append(
+                {
+                    "id": x[0],
+                    "verificationMethod": {
+                        "id": x[1][0],
+                        "verificationMethodType": x[1][1],
+                        "controller": x[1][2],
+                        "publicKeyJwk": x[1][3],
+                        "publicKeyMultibase": x[1][4],
+                    },
+                }
+            )
+        assertionMethod = []
+        for x in didDoc[5]:
+            assertionMethod.append(
+                {
+                    "id": x[0],
+                    "verificationMethod": {
+                        "id": x[1][0],
+                        "verificationMethodType": x[1][1],
+                        "controller": x[1][2],
+                        "publicKeyJwk": x[1][3],
+                        "publicKeyMultibase": x[1][4],
+                    },
+                }
+            )
+        capabilityInvocation = []
+        for x in didDoc[6]:
+            capabilityInvocation.append(
+                {
+                    "id": x[0],
+                    "verificationMethod": {
+                        "id": x[1][0],
+                        "verificationMethodType": x[1][1],
+                        "controller": x[1][2],
+                        "publicKeyJwk": x[1][3],
+                        "publicKeyMultibase": x[1][4],
+                    },
+                }
+            )
+        capabilityDelegation = []
+        for x in didDoc[7]:
+            capabilityDelegation.append(
+                {
+                    "id": x[0],
+                    "verificationMethod": {
+                        "id": x[1][0],
+                        "verificationMethodType": x[1][1],
+                        "controller": x[1][2],
+                        "publicKeyJwk": x[1][3],
+                        "publicKeyMultibase": x[1][4],
+                    },
+                }
+            )
+        keyAgreement = []
+        for x in didDoc[8]:
+            keyAgreement.append(
+                {
+                    "id": x[0],
+                    "verificationMethod": {
+                        "id": x[1][0],
+                        "verificationMethodType": x[1][1],
+                        "controller": x[1][2],
+                        "publicKeyJwk": x[1][3],
+                        "publicKeyMultibase": x[1][4],
+                    },
+                }
+            )
+        service = []
+        for x in didDoc[9]:
+            accp = []
+            for y in x[3]:
+                accp.append(y)
+            rtk = []
+            for y in x[4]:
+                rtk.append(y)
+            service.append(
+                {
+                    "id": x[0],
+                    "serviceType": x[1],
+                    "serviceEndpoint": x[2],
+                    "accept": accp,
+                    "routingKeys": rtk,
+                }
+            )
+        alsoKnownAs = []
+        for x in didDoc[10]:
+            alsoKnownAs.append(x)
+        didDocument = {
+            "context": context,
+            "id": didDoc[1],
+            "controller": controller,
+            "verificationMethod": verificationMethod,
+            "authentication": authentication,
+            "assertionMethod": assertionMethod,
+            "capabilityInvocation": capabilityInvocation,
+            "capabilityDelegation": capabilityDelegation,
+            "service": service,
+            "alsoKnownAs": alsoKnownAs,
+        }
+        return didDocument
+
+    async def get_endpoint_for_did(
+        self, did: str, endpoint_type: EndpointType = EndpointType.ENDPOINT
+    ) -> str:
+        raise NotImplementedError
+
+    async def get_all_endpoints_for_did(self, did: str) -> dict:
+        raise NotImplementedError
 
     async def register_nym(
         self,

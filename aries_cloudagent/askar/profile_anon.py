@@ -20,6 +20,7 @@ from ..indy.issuer import IndyIssuer
 from ..ledger.base import BaseLedger
 from ..ledger.besu_vdr import (
     CREDENTIAL_DEFINITION_REGISTRY,
+    INDY_DID_REGISTRY,
     REVOCATION_REGISTRY,
     SCHEMA_REGISTRY,
     BesuVdrLedger,
@@ -109,6 +110,9 @@ class AskarAnoncredsProfile(Profile):
                     ),
                     REVOCATION_REGISTRY: self.settings.get(
                         "ledger.revocation_contract_address"
+                    ),
+                    INDY_DID_REGISTRY: self.settings.get(
+                        "ledger.indy_did_contract_address"
                     ),
                 },
             )

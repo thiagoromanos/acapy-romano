@@ -3,7 +3,6 @@
 import asyncio
 import json
 import logging
-
 from typing import List, Optional, Sequence, Tuple, Union
 
 from aries_askar import (
@@ -15,24 +14,23 @@ from aries_askar import (
     SeedMethod,
 )
 
-from .did_parameters_validation import DIDParametersValidation
 from ..askar.didcomm.v1 import pack_message, unpack_message
 from ..askar.profile import AskarProfileSession
 from ..ledger.base import BaseLedger
 from ..ledger.endpoint_type import EndpointType
 from ..ledger.error import LedgerConfigError
 from ..storage.askar import AskarStorage
-from ..storage.base import StorageRecord, StorageDuplicateError, StorageNotFoundError
-
-from .base import BaseWallet, KeyInfo, DIDInfo
+from ..storage.base import StorageDuplicateError, StorageNotFoundError, StorageRecord
+from .base import BaseWallet, DIDInfo, KeyInfo
 from .crypto import (
     sign_message,
     validate_seed,
     verify_signed_message,
 )
 from .did_info import INVITATION_REUSE_KEY
-from .did_method import SOV, DIDMethod, DIDMethods
-from .error import WalletError, WalletDuplicateError, WalletNotFoundError
+from .did_method import INDY2, SOV, DIDMethod, DIDMethods
+from .did_parameters_validation import DIDParametersValidation
+from .error import WalletDuplicateError, WalletError, WalletNotFoundError
 from .key_type import BLS12381G2, ED25519, KeyType, KeyTypes
 from .util import b58_to_bytes, bytes_to_b58
 
@@ -518,8 +516,10 @@ class AskarWallet(BaseWallet):
                 'endpoint' affects local wallet
         """
         did_info = await self.get_local_did(did)
-        if did_info.method != SOV:
-            raise WalletError("Setting DID endpoint is only allowed for did:sov DIDs")
+        if did_info.method != SOV and did_info.method != INDY2:
+            raise WalletError(
+                "Setting DID endpoint is only allowed for did:sov and did:indy2 DIDs"
+            )
         metadata = {**did_info.metadata}
         if not endpoint_type:
             endpoint_type = EndpointType.ENDPOINT

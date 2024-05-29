@@ -12,13 +12,13 @@ from typing import Callable, Coroutine, Optional, Pattern, Sequence, cast
 import aiohttp_cors
 import jwt
 from aiohttp import web
+from aiohttp.web_log import AccessLogger
 from aiohttp_apispec import (
     docs,
     response_schema,
     setup_aiohttp_apispec,
     validation_middleware,
 )
-
 from marshmallow import fields
 
 from ..config.injection_context import InjectionContext
@@ -57,6 +57,18 @@ EVENT_WEBHOOK_MAPPING = {
     "acapy::actionmenu::perform-menu-action": "perform-menu-action",
     "acapy::keylist::updated": "keylist",
 }
+
+
+class CustomAccessLogger(AccessLogger):
+    """Custom logger that doesn't logs healthcheck endpoints."""
+
+    def log(
+        self, request: web.BaseRequest, response: web.StreamResponse, time: float
+    ) -> None:
+        """Log everything but ready and live."""
+        if request.path == "/status/ready" or request.path == "/status/live":
+            return
+        return super().log(request, response, time)
 
 
 class AdminModulesSchema(OpenAPISchema):
@@ -529,7 +541,10 @@ class AdminServer(BaseAdminServer):
             return dict(sorted(raw.items(), key=lambda x: x[0]))
 
         self.app = await self.make_application()
-        runner = web.AppRunner(self.app)
+        runner = web.AppRunner(
+            self.app, kwargs={"access_log_class": CustomAccessLogger}
+        )
+
         await runner.setup()
 
         plugin_registry = self.context.inject_or(PluginRegistry)

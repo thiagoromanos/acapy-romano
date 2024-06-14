@@ -230,6 +230,21 @@ async def debug_middleware(request: web.BaseRequest, handler: Coroutine):
     return await handler(request)
 
 
+@web.middleware
+async def debug_middleware_supress(request: web.BaseRequest, handler: Coroutine):
+    """Show request detail in debug log, except for live and ready status."""
+
+    if LOGGER.isEnabledFor(logging.DEBUG) and not (
+        request.path == "/status/ready" or request.path == "/status/live"
+    ):
+        LOGGER.debug(f"Incoming request: {request.method} {request.path_qs}")
+        LOGGER.debug(f"Match info: {request.match_info}")
+        body = await request.text() if request.body_exists else None
+        LOGGER.debug(f"Body: {body}")
+
+    return await handler(request)
+
+
 def const_compare(string1, string2):
     """Compare two strings in constant time."""
     if string1 is None or string2 is None:
@@ -268,6 +283,9 @@ class AdminServer(BaseAdminServer):
         self.admin_api_key = context.settings.get("admin.admin_api_key")
         self.admin_insecure_mode = bool(
             context.settings.get("admin.admin_insecure_mode")
+        )
+        self.supressHealthEndpoints = bool(
+            context.settings.get("log.supress-healthcheck-log")
         )
         self.host = host
         self.port = port
@@ -311,7 +329,13 @@ class AdminServer(BaseAdminServer):
     async def make_application(self) -> web.Application:
         """Get the aiohttp application instance."""
 
-        middlewares = [ready_middleware, debug_middleware]
+        middlewares = [ready_middleware]
+
+        (
+            middlewares.append(debug_middleware)
+            if not self.supressHealthEndpoints
+            else middlewares.append(debug_middleware_supress)
+        )
 
         # admin-token and admin-token are mutually exclusive and required.
         # This should be enforced during parameter parsing but to be sure,
@@ -541,8 +565,11 @@ class AdminServer(BaseAdminServer):
             return dict(sorted(raw.items(), key=lambda x: x[0]))
 
         self.app = await self.make_application()
-        runner = web.AppRunner(
-            self.app, kwargs={"access_log_class": CustomAccessLogger}
+
+        runner = (
+            web.AppRunner(self.app, access_log_class=CustomAccessLogger)
+            if self.supressHealthEndpoints
+            else web.AppRunner(self.app)
         )
 
         await runner.setup()

@@ -439,7 +439,7 @@ class BesuVdrLedger(BaseLedger):
         endorser_did: str = None,
         routing_keys: List[str] = None,
     ) -> bool:
-
+        """Return true for now."""
         LOGGER.info(
             f"Trying to update did {did} setting endpoint to {endpoint}. That's not "
             "implemented yet"
@@ -455,9 +455,9 @@ class BesuVdrLedger(BaseLedger):
         didDocStorage = contract.functions.resolveDid(fullDid).call()
         didDoc = didDocStorage[0]
 
-        self.didDocDictFromTuple(didDoc)
+        self._didDocDictFromTuple(didDoc)
 
-        raise NotImplementedError
+        return True
 
     def _didDocDictFromTuple(self, didDoc) -> dict:
         context = []

@@ -808,7 +808,10 @@ class LedgerGroup(ArgumentGroup):
             metavar="<account>",
             dest="account_address",
             env_var="ACAPY_ACCOUNT_ADDRESS",
-            help=("Specifies the user address from besu"),
+            help=(
+                "Specifies the user address from besu. If the address doesn't "
+                "starts with 0x, a hex conversion is done."
+            ),
         )
         parser.add_argument(
             "--private-account-key",
@@ -816,7 +819,10 @@ class LedgerGroup(ArgumentGroup):
             metavar="<account>",
             dest="private_account_key",
             env_var="ACAPY_PRIVATE_ACCOUNT_KEY",
-            help=("Specifies the user account private key"),
+            help=(
+                "Specifies the user account private key. If the key doesn't "
+                "starts with 0x, a hex conversion is done."
+            ),
         )
         parser.add_argument(
             "--besu-provider-url",
@@ -832,7 +838,10 @@ class LedgerGroup(ArgumentGroup):
             metavar="<account>",
             dest="indy_did_contract_address",
             env_var="ACAPY_INDY_DID_CONTRACT_ADDRESS",
-            help=("Specifies the DID registry contract address"),
+            help=(
+                "Specifies the DID registry contract address. If the address doesn't "
+                "starts with 0x, a hex conversion is done."
+            ),
         )
         parser.add_argument(
             "--schema-contract-address",
@@ -840,7 +849,10 @@ class LedgerGroup(ArgumentGroup):
             metavar="<contract>",
             dest="schema_contract_address",
             env_var="ACAPY_SCHEMA_CONTRACT_ADDRESS",
-            help=("Specifies the schema contract address"),
+            help=(
+                "Specifies the schema contract address. If the address doesn't "
+                "starts with 0x, a hex conversion is done."
+            ),
         )
         parser.add_argument(
             "--credef-contract-address",
@@ -848,7 +860,10 @@ class LedgerGroup(ArgumentGroup):
             metavar="<contract>",
             dest="credef_contract_address",
             env_var="ACAPY_CREDF_CONTRACT_ADDRESS",
-            help=("Specifies the credf contract address"),
+            help=(
+                "Specifies the credf contract address. If the address doesn't "
+                "starts with 0x, a hex conversion is done."
+            ),
         )
         parser.add_argument(
             "--revocation-contract-address",
@@ -856,7 +871,10 @@ class LedgerGroup(ArgumentGroup):
             metavar="<account>",
             dest="revocation_contract_address",
             env_var="ACAPY_REVOCATION_CONTRACT_ADDRESS",
-            help=("Specifies the revocation contract address"),
+            help=(
+                "Specifies the revocation contract address. If the address doesn't "
+                "starts with 0x, a hex conversion is done."
+            ),
         )
         parser.add_argument(
             "--ledger-pool-name",
@@ -967,15 +985,35 @@ class LedgerGroup(ArgumentGroup):
             settings["ledger.disabled"] = True
         elif args.besu_provider_url:
             settings["ledger.besu_provider_url"] = args.besu_provider_url
-            settings["ledger.private_account_key"] = args.private_account_key
-            settings["ledger.account_address"] = args.account_address
-            settings["ledger.schema_contract_address"] = args.schema_contract_address
-            settings["ledger.credef_contract_address"] = args.credef_contract_address
+            settings["ledger.private_account_key"] = (
+                args.private_account_key
+                if args.private_account_key.startswith("0x")
+                else hex(int(args.private_account_key))
+            )
+            settings["ledger.account_address"] = (
+                args.account_address
+                if args.account_address.startswith("0x")
+                else hex(int(args.account_address))
+            )
+            settings["ledger.schema_contract_address"] = (
+                args.schema_contract_address
+                if args.schema_contract_address.startswith("0x")
+                else hex(int(args.schema_contract_address))
+            )
+            settings["ledger.credef_contract_address"] = (
+                args.credef_contract_address
+                if args.credef_contract_address.startswith("0x")
+                else hex(int(args.credef_contract_address))
+            )
             settings["ledger.revocation_contract_address"] = (
                 args.revocation_contract_address
+                if args.revocation_contract_address.startswith("0x")
+                else hex(int(args.revocation_contract_address))
             )
             settings["ledger.indy_did_contract_address"] = (
                 args.indy_did_contract_address
+                if args.indy_did_contract_address.startswith("0x")
+                else hex(int(args.indy_did_contract_address))
             )
         else:
             single_configured = False
@@ -1081,6 +1119,15 @@ class LoggingGroup(ArgumentGroup):
                 "('debug', 'info', 'warning', 'error', 'critical')"
             ),
         )
+        parser.add_argument(
+            "--supress-healthcheck-log",
+            action="store_true",
+            env_var="ACAPY_SUPRESS_HEALTHCHECK_LOG",
+            help=(
+                "Supress the output for requests to /status/live and "
+                "/status/ready endpoints"
+            ),
+        )
 
     def get_settings(self, args: Namespace) -> dict:
         """Extract logging settings."""
@@ -1091,6 +1138,8 @@ class LoggingGroup(ArgumentGroup):
             settings["log.file"] = args.log_file
         if args.log_level:
             settings["log.level"] = args.log_level
+        settings["log.supress-healthcheck-log"] = args.supress_healthcheck_log
+
         return settings
 
 

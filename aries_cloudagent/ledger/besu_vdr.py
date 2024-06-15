@@ -152,7 +152,7 @@ class BesuVdrLedger(BaseLedger):
         LOGGER.error("SeqNo not available on Besu VDR")
         raise NotImplementedError
 
-    def credential_definition_id2schema_id(self, cred_def_id: str) -> str:
+    async def credential_definition_id2schema_id(self, cred_def_id: str) -> str:
         """Get schema id. Just regex, no need to search the ledger for this."""
 
         schema_id = cred_def_id.split("CLAIM_DEF/")[1].split("/")

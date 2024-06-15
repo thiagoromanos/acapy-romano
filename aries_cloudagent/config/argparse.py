@@ -810,7 +810,7 @@ class LedgerGroup(ArgumentGroup):
             env_var="ACAPY_ACCOUNT_ADDRESS",
             help=(
                 "Specifies the user address from besu. If the address doesn't "
-                "starts with 0x, a hex conversion is done."
+                "starts with 0x, this prefix is added."
             ),
         )
         parser.add_argument(
@@ -821,7 +821,7 @@ class LedgerGroup(ArgumentGroup):
             env_var="ACAPY_PRIVATE_ACCOUNT_KEY",
             help=(
                 "Specifies the user account private key. If the key doesn't "
-                "starts with 0x, a hex conversion is done."
+                "starts with 0x, this prefix is added."
             ),
         )
         parser.add_argument(
@@ -840,7 +840,7 @@ class LedgerGroup(ArgumentGroup):
             env_var="ACAPY_INDY_DID_CONTRACT_ADDRESS",
             help=(
                 "Specifies the DID registry contract address. If the address doesn't "
-                "starts with 0x, a hex conversion is done."
+                "starts with 0x, this prefix is added."
             ),
         )
         parser.add_argument(
@@ -851,7 +851,7 @@ class LedgerGroup(ArgumentGroup):
             env_var="ACAPY_SCHEMA_CONTRACT_ADDRESS",
             help=(
                 "Specifies the schema contract address. If the address doesn't "
-                "starts with 0x, a hex conversion is done."
+                "starts with 0x, this prefix is added."
             ),
         )
         parser.add_argument(
@@ -862,7 +862,7 @@ class LedgerGroup(ArgumentGroup):
             env_var="ACAPY_CREDF_CONTRACT_ADDRESS",
             help=(
                 "Specifies the credf contract address. If the address doesn't "
-                "starts with 0x, a hex conversion is done."
+                "starts with 0x, this prefix is added."
             ),
         )
         parser.add_argument(
@@ -873,7 +873,7 @@ class LedgerGroup(ArgumentGroup):
             env_var="ACAPY_REVOCATION_CONTRACT_ADDRESS",
             help=(
                 "Specifies the revocation contract address. If the address doesn't "
-                "starts with 0x, a hex conversion is done."
+                "starts with 0x, this prefix is added."
             ),
         )
         parser.add_argument(
@@ -988,32 +988,32 @@ class LedgerGroup(ArgumentGroup):
             settings["ledger.private_account_key"] = (
                 args.private_account_key
                 if args.private_account_key.startswith("0x")
-                else hex(int(args.private_account_key))
+                else f"0x{args.private_account_key}"
             )
             settings["ledger.account_address"] = (
                 args.account_address
                 if args.account_address.startswith("0x")
-                else hex(int(args.account_address))
+                else f"0x{args.account_address}"
             )
             settings["ledger.schema_contract_address"] = (
                 args.schema_contract_address
                 if args.schema_contract_address.startswith("0x")
-                else hex(int(args.schema_contract_address))
+                else f"0x{args.schema_contract_address}"
             )
             settings["ledger.credef_contract_address"] = (
                 args.credef_contract_address
                 if args.credef_contract_address.startswith("0x")
-                else hex(int(args.credef_contract_address))
+                else f"0x{args.credef_contract_address}"
             )
             settings["ledger.revocation_contract_address"] = (
                 args.revocation_contract_address
                 if args.revocation_contract_address.startswith("0x")
-                else hex(int(args.revocation_contract_address))
+                else f"0x{args.revocation_contract_address}"
             )
             settings["ledger.indy_did_contract_address"] = (
                 args.indy_did_contract_address
                 if args.indy_did_contract_address.startswith("0x")
-                else hex(int(args.indy_did_contract_address))
+                else f"0x{args.indy_did_contract_address}"
             )
         else:
             single_configured = False

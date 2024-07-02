@@ -8,9 +8,9 @@ from ...messaging.models.base import BaseModel, BaseModelSchema
 from ...messaging.valid import (
     INDY_CRED_DEF_ID_EXAMPLE,
     INDY_CRED_DEF_ID_VALIDATE,
-    UUID4_EXAMPLE,
     NUM_STR_WHOLE_EXAMPLE,
     NUM_STR_WHOLE_VALIDATE,
+    UUID4_EXAMPLE,
 )
 
 
@@ -25,6 +25,7 @@ class IndyCredRequest(BaseModel):
     def __init__(
         self,
         prover_did: str = None,
+        entropy: str = None,
         cred_def_id: str = None,
         blinded_ms: Mapping = None,
         blinded_ms_correctness_proof: Mapping = None,
@@ -34,6 +35,7 @@ class IndyCredRequest(BaseModel):
         """Initialize indy credential request."""
         super().__init__(**kwargs)
         self.prover_did = prover_did
+        self.entropy = entropy
         self.cred_def_id = cred_def_id
         self.blinded_ms = blinded_ms
         self.blinded_ms_correctness_proof = blinded_ms_correctness_proof
@@ -50,9 +52,14 @@ class IndyCredRequestSchema(BaseModelSchema):
         unknown = EXCLUDE
 
     prover_did = fields.Str(
-        required=True,
         metadata={
             "description": "Prover DID/Random String/UUID",
+            "example": UUID4_EXAMPLE,
+        },
+    )
+    entropy = fields.Str(
+        metadata={
+            "description": "Entropy/Random String/UUID",
             "example": UUID4_EXAMPLE,
         },
     )

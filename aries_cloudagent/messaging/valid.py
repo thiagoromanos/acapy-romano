@@ -338,7 +338,7 @@ class IndyDID(Regexp):
     """Validate value against indy DID."""
 
     EXAMPLE = "WgWxqztrNooG92RXvxSTWv"
-    PATTERN = re.compile(rf"^(did:sov:)?[{B58}]{{21,22}}$")
+    PATTERN = re.compile(rf"^(did:sov:)?[{B58}]{{21,22}}$|^(did:indy2)?:.+:[{B58}]{{21,22}}$")
 
     def __init__(self):
         """Initialize the instance."""
@@ -423,7 +423,7 @@ class RoutingKey(Regexp):
             ),
         )
 
-
+# Modifiquei aqui 
 class IndyCredDefId(Regexp):
     """Validate value against indy credential definition identifier specification."""
 
@@ -433,7 +433,12 @@ class IndyCredDefId(Regexp):
         f":3"  # cred def id marker
         f":CL"  # sig alg
         rf":(([1-9][0-9]*)|([{B58}]{{21,22}}:2:.+:[0-9.]+))"  # schema txn / id
-        f":(.+)?$"  # tag
+        f":(.+)?$|"  # tag    
+        rf"^((did:indy2)?:.+:[{B58}]{{21,22}})"  # issuer DID
+        f"/anoncreds/v0/CLAIM_DEF/"  # cred def id marker
+        # f":CL"  # sig alg
+        rf"((did:indy2)?:.+:[{B58}]{{21,22}}/anoncreds/v0/SCHEMA/.+/[0-9.]+)"  # schema txn / id
+        f"/(.+)?$"  # tag
     )
 
     def __init__(self):
@@ -464,7 +469,7 @@ class IndySchemaId(Regexp):
     """Validate value against indy schema identifier specification."""
 
     EXAMPLE = "WgWxqztrNooG92RXvxSTWv:2:schema_name:1.0"
-    PATTERN = rf"^[{B58}]{{21,22}}:2:.+:[0-9.]+$"
+    PATTERN = rf"^[{B58}]{{21,22}}:2:.+:[0-9.]+$|^(did:indy2)?:.+:[{B58}]{{21,22}}/anoncreds/v0/SCHEMA/.+/[0-9.]+$"
 
     def __init__(self):
         """Initialize the instance."""
@@ -483,7 +488,13 @@ class IndyRevRegId(Regexp):
         rf"^([{B58}]{{21,22}}):4:"
         rf"([{B58}]{{21,22}}):3:"
         rf"CL:(([1-9][0-9]*)|([{B58}]{{21,22}}:2:.+:[0-9.]+))(:.+)?:"
-        rf"CL_ACCUM:(.+$)"
+        rf"CL_ACCUM:(.+$)|^((did:indy2)?:.+:[{B58}]{{21,22}})"  # issuer DID
+            f"/anoncreds/v0/REV_REG/"  # cred def id marker
+            rf"((did:indy2)?:.+:[{B58}]{{21,22}})"  # issuer DID
+            f"/anoncreds/v0/CLAIM_DEF/"  # cred def id marker
+            # f":CL"  # sig alg
+            rf"((did:indy2)?:.+:[{B58}]{{21,22}}/anoncreds/v0/SCHEMA/.+/[0-9.]+)"  # schema txn / id
+            f"/(.+)?(:|/)CL_ACCUM(:|/).+$"
     )
 
     def __init__(self):

@@ -4,11 +4,12 @@ from typing import Optional
 
 from aries_cloudagent.did.did_key import DIDKey
 from aries_cloudagent.wallet.did_method import (
-    DIDMethods,
-    DIDMethod,
-    HolderDefinedDid,
+    INDY2,
     KEY,
     SOV,
+    DIDMethod,
+    DIDMethods,
+    HolderDefinedDid,
 )
 from aries_cloudagent.wallet.error import WalletError
 from aries_cloudagent.wallet.key_type import KeyType
@@ -58,7 +59,7 @@ class DIDParametersValidation:
         # are added it is probably better create a did method specific handler
         elif method == KEY:
             return DIDKey.from_public_key(verkey, key_type).did
-        elif method == SOV:
+        elif method == SOV or method == INDY2:
             return bytes_to_b58(verkey[:16]) if not did else did
 
         return did

@@ -5,7 +5,6 @@ import logging
 import time
 
 # import traceback
-
 from typing import Any, Mapping
 from weakref import ref
 
@@ -19,14 +18,21 @@ from ..core.profile import Profile, ProfileManager, ProfileSession
 from ..indy.holder import IndyHolder
 from ..indy.issuer import IndyIssuer
 from ..ledger.base import BaseLedger
+from ..ledger.besu_vdr import (
+    CREDENTIAL_DEFINITION_REGISTRY,
+    INDY_DID_REGISTRY,
+    REVOCATION_REGISTRY,
+    SCHEMA_REGISTRY,
+    BesuVdrLedger,
+    BesuVDRWeb3Config,
+)
 from ..ledger.indy_vdr import IndyVdrLedger, IndyVdrLedgerPool
 from ..storage.base import BaseStorage, BaseStorageSearch
 from ..storage.vc_holder.base import VCHolder
 from ..utils.multi_ledger import get_write_ledger_config_for_profile
 from ..wallet.base import BaseWallet
 from ..wallet.crypto import validate_seed
-
-from .store import AskarStoreConfig, AskarOpenStore
+from .store import AskarOpenStore, AskarStoreConfig
 
 LOGGER = logging.getLogger(__name__)
 
@@ -48,6 +54,7 @@ class AskarAnoncredsProfile(Profile):
         super().__init__(context=context, name=opened.name, created=opened.created)
         self.opened = opened
         self.ledger_pool: IndyVdrLedgerPool = None
+        self.besu_configs: BesuVDRWeb3Config = None
         self.profile_id = profile_id
         self.init_ledger_pool()
         self.bind_providers()
@@ -88,6 +95,26 @@ class AskarAnoncredsProfile(Profile):
                 genesis_transactions=genesis_transactions,
                 read_only=read_only,
                 socks_proxy=socks_proxy,
+            )
+        elif self.settings.get("ledger.besu_provider_url"):
+            self.besu_configs = BesuVDRWeb3Config(
+                ledgerAddr=self.settings.get("ledger.besu_provider_url"),
+                trusteeAccount=self.settings.get("ledger.account_address"),
+                trusteePKey=self.settings.get("ledger.private_account_key"),
+                contractAddrs={
+                    SCHEMA_REGISTRY: self.settings.get(
+                        "ledger.schema_contract_address"
+                    ),
+                    CREDENTIAL_DEFINITION_REGISTRY: self.settings.get(
+                        "ledger.credef_contract_address"
+                    ),
+                    REVOCATION_REGISTRY: self.settings.get(
+                        "ledger.revocation_contract_address"
+                    ),
+                    INDY_DID_REGISTRY: self.settings.get(
+                        "ledger.indy_did_contract_address"
+                    ),
+                },
             )
 
     def bind_providers(self):
@@ -160,6 +187,10 @@ class AskarAnoncredsProfile(Profile):
         elif self.ledger_pool:
             injector.bind_provider(
                 BaseLedger, ClassProvider(IndyVdrLedger, self.ledger_pool, ref(self))
+            )
+        elif self.besu_configs:
+            injector.bind_provider(
+                BaseLedger, ClassProvider(BesuVdrLedger, self.besu_configs, ref(self))
             )
 
     def session(

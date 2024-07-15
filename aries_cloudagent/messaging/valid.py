@@ -489,7 +489,7 @@ class IndyRevRegId(Regexp):
         rf"([{B58}]{{21,22}}):3:"
         rf"CL:(([1-9][0-9]*)|([{B58}]{{21,22}}:2:.+:[0-9.]+))(:.+)?:"
         rf"CL_ACCUM:(.+$)|^((did:indy2)?:.+:[{B58}]{{21,22}})"  # issuer DID
-            f"/anoncreds/v0/REV_REG/"  # cred def id marker
+            f"/anoncreds/v0/REV_REG_DEF/"  # cred def id marker
             rf"((did:indy2)?:.+:[{B58}]{{21,22}})"  # issuer DID
             f"/anoncreds/v0/CLAIM_DEF/"  # cred def id marker
             # f":CL"  # sig alg

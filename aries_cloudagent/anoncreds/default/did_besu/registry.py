@@ -8,6 +8,7 @@ from typing import List, Optional, Pattern, Sequence, Tuple
 
 from base58 import alphabet
 from web3 import Web3
+from web3.exceptions import ContractCustomError
 from web3.middleware import geth_poa_middleware
 from web3.types import TxReceipt
 
@@ -255,6 +256,10 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         # Wait for transaction receipt
         tx_receipt = self.web3.eth.wait_for_transaction_receipt(send_tx)
 
+        if tx_receipt["status"] == 0:
+            LOGGER.debug("Receipt of the reverted transaction: %s", tx_receipt)
+            raise AnonCredsRegistrationError(f"Transaction reverted: %s", send_tx)
+        
         return tx_receipt
 
     async def register_revocation(
@@ -621,7 +626,10 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
             # receipt = contract.functions.createSchema(indy_schema).transact({"from": self.ACCOUNT})
             LOGGER.debug("Receipt: %s", tx_receipt)
             # Was it realy created?
-            result = contract.functions.resolveRevocation(rev_reg_def_id).call()
+            try:
+                contract.functions.resolveRevocation(rev_reg_def_id).call()
+            except ContractCustomError as e:
+                raise AnonCredsRegistrationError("Error searching for newly created revocation") from e
 
             seq_no = self.REVOCATION_ADDRESS
         except LedgerError as err:

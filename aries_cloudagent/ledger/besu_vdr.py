@@ -144,7 +144,7 @@ class BesuVdrLedger(BaseLedger):
                 )
 
         except ContractCustomError as ex:
-            LOGGER.error(f"Could not retrieve schema {schema_id} {ex.message}")
+            LOGGER.debug(f"Could not retrieve schema {schema_id} {ex.message}")
         return schema
 
     async def fetch_schema_by_seq_no(self, seq_no: int) -> dict:
@@ -367,7 +367,7 @@ class BesuVdrLedger(BaseLedger):
         tx_receipt = self._send_signed_transaction(call_function, False)
         LOGGER.debug("Receipt: %s", tx_receipt)
 
-        result = self.fetch_credential_definition(cred_def_id)
+        result = await self.fetch_credential_definition(cred_def_id)
         if not result:
             raise LedgerError("Failed to register credef")
 

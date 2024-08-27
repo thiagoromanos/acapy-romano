@@ -12,8 +12,10 @@ from web3.exceptions import ContractCustomError
 from web3.middleware import geth_poa_middleware
 from web3.types import TxReceipt
 
+from ....anoncreds.events import RevListFinishedEvent
 from ....cache.base import BaseCache
 from ....config.injection_context import InjectionContext
+from ....core.event_bus import EventBus
 from ....core.profile import Profile
 from ....ledger.base import BaseLedger
 from ....ledger.error import (
@@ -258,8 +260,8 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
 
         if tx_receipt["status"] == 0:
             LOGGER.debug("Receipt of the reverted transaction: %s", tx_receipt)
-            raise AnonCredsRegistrationError(f"Transaction reverted: %s", send_tx)
-        
+            raise AnonCredsRegistrationError("Transaction reverted: %s", send_tx)
+
         return tx_receipt
 
     async def register_revocation(
@@ -629,7 +631,9 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
             try:
                 contract.functions.resolveRevocation(rev_reg_def_id).call()
             except ContractCustomError as e:
-                raise AnonCredsRegistrationError("Error searching for newly created revocation") from e
+                raise AnonCredsRegistrationError(
+                    "Error searching for newly created revocation"
+                ) from e
 
             seq_no = self.REVOCATION_ADDRESS
         except LedgerError as err:
@@ -673,7 +677,7 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
 
     def _indexes_to_bit_array(self, indexes: List[int], size: int) -> List[int]:
         """Turn a sequence of indexes into a full state bit array."""
-        return [1 if index in indexes else 0 for index in range(1, size + 1)]
+        return [1 if index in indexes else 0 for index in range(0, size + 1)]
 
     async def _get_ledger(self, profile: Profile, rev_reg_def_id: str):
         async with profile.session() as session:
@@ -864,18 +868,31 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         options: Optional[dict] = None,
     ) -> RevListResult:
         """Update a revocation list."""
+        delta, _ = await self.get_revocation_registry_delta(
+            profile, curr_list.rev_reg_def_id, 0
+        )
+        delta_list = delta["value"]["revoked"] if delta["value"].get("revoked") else []
         newly_revoked_indices = list(revoked)
+        full_revoked_list = newly_revoked_indices + delta_list
         rev_reg_entry = {
             "ver": "1.0",
             "value": {
                 "accum": curr_list.current_accumulator,
                 "prevAccum": prev_list.current_accumulator,
-                "revoked": newly_revoked_indices,
+                "revoked": full_revoked_list,
             },
         }
 
         await self._revoc_reg_entry_with_fix(
             profile, curr_list, rev_reg_def.type, rev_reg_entry
+        )
+
+        event_bus = profile.inject(EventBus)
+        await event_bus.notify(
+            profile,
+            RevListFinishedEvent.with_payload(
+                curr_list.rev_reg_def_id, newly_revoked_indices
+            ),
         )
 
         return RevListResult(

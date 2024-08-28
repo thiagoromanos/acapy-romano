@@ -786,7 +786,7 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
                     "chainId": Chain_id,
                     "from": self.ACCOUNT,
                     "nonce": nonce,
-                    "gas": 3000000,
+                    "gas": "0x1fffffffffffff",
                 }
             )
 

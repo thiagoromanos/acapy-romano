@@ -148,6 +148,7 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         self.VALIDATOR_CONTROL_ADDRESS = None
         self.ROLE_CONTROL_ADDRESS = None
         self.REVOCATION_ADDRESS = None
+        self.REVOCATION_LIST_GAS_LIMIT = "0x1fffffffffffff"
 
     @property
     def supported_identifiers_regex(self) -> Pattern:
@@ -168,6 +169,10 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         self.REVOCATION_ADDRESS = context.settings.get(
             "ledger.revocation_contract_address"
         )
+        if context.settings.get("ledger.revocation_list_gas_limit"):
+            self.REVOCATION_LIST_GAS_LIMIT = context.settings.get(
+                "ledger.revocation_list_gas_limit"
+            )
 
         self.web3 = Web3(Web3.HTTPProvider(self.HTTP_PROVIDER))
         self.web3.middleware_onion.inject(geth_poa_middleware, layer=0)
@@ -276,7 +281,13 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         Chain_id = self.web3.eth.chain_id
         nonce = self.web3.eth.get_transaction_count(self.ACCOUNT)
         call_function = contract.functions.createRevocation(rev_json).build_transaction(
-            {"chainId": Chain_id, "from": self.ACCOUNT, "nonce": nonce, "gas": 3000000}
+            {
+                "chainId": Chain_id,
+                "from": self.ACCOUNT,
+                "nonce": nonce,
+                "gas": 3000000,
+                "gasPrice": self.web3.eth.gas_price,
+            }
         )
 
         tx_receipt = await self.send_transaction_tx(call_function)
@@ -620,6 +631,7 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
                     "from": self.ACCOUNT,
                     "nonce": nonce,
                     "gas": 3000000,
+                    "gasPrice": self.web3.eth.gas_price,
                 }
             )
 
@@ -786,7 +798,8 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
                     "chainId": Chain_id,
                     "from": self.ACCOUNT,
                     "nonce": nonce,
-                    "gas": "0x1fffffffffffff",
+                    "gas": int(self.REVOCATION_LIST_GAS_LIMIT),
+                    "gasPrice": self.web3.eth.gas_price,
                 }
             )
 

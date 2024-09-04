@@ -382,6 +382,7 @@ class BesuVdrLedger(BaseLedger):
             "chainId": chain_id,
             "from": self.ledgerConfig.trusteeAccount,
             "nonce": nonce,
+            "gasPrice": self.web3.eth.gas_price,
         }
         if includeGasInTx:
             txParams["gas"] = 3000000

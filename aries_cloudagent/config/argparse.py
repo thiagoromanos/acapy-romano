@@ -877,6 +877,17 @@ class LedgerGroup(ArgumentGroup):
             ),
         )
         parser.add_argument(
+            "--revocation-list-gas-limit",
+            type=str,
+            metavar="<account>",
+            required=False,
+            dest="revocation_list_gas_limit",
+            env_var="ACAPY_REVOCATION_LIST_GAS_LIMIT",
+            help=(
+                "Specifies de gas limit for the update of revocation list transaction."
+            ),
+        )
+        parser.add_argument(
             "--ledger-pool-name",
             type=str,
             metavar="<ledger-pool-name>",
@@ -1015,6 +1026,10 @@ class LedgerGroup(ArgumentGroup):
                 if args.indy_did_contract_address.startswith("0x")
                 else f"0x{args.indy_did_contract_address}"
             )
+            if args.revocation_list_gas_limit:
+                settings["ledger.revocation_list_gas_limit"] = (
+                    args.revocation_list_gas_limit
+                )
         else:
             single_configured = False
             multi_configured = False

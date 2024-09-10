@@ -509,6 +509,62 @@ async def revoke(request: web.BaseRequest):
         raise web.HTTPBadRequest(reason=err.roll_up) from err
 
 
+@docs(
+    tags=[TAG_TITLE],
+    summary="Unrevoke an revoked credential",
+)
+@request_schema(RevokeRequestSchemaAnoncreds())
+@response_schema(RevocationAnoncredsModuleResponseSchema(), description="")
+async def unrevoke(request: web.BaseRequest):
+    """Request handler for storing a credential revocation reversal.
+
+    Args:
+        request: aiohttp request object
+
+    Returns:
+        The credential revocation details.
+
+    """
+    context: AdminRequestContext = request["context"]
+    profile = context.profile
+
+    is_not_anoncreds_profile_raise_web_exception(profile)
+
+    body = await request.json()
+    cred_ex_id = body.get("cred_ex_id")
+    body["notify"] = body.get("notify", context.settings.get("revocation.notify"))
+    notify = body.get("notify")
+    connection_id = body.get("connection_id")
+    body["notify_version"] = body.get("notify_version", "v1_0")
+    notify_version = body["notify_version"]
+
+    if notify and not connection_id:
+        raise web.HTTPBadRequest(reason="connection_id must be set when notify is true")
+    if notify and not notify_version:
+        raise web.HTTPBadRequest(
+            reason="Request must specify notify_version if notify is true"
+        )
+
+    rev_manager = RevocationManager(profile)
+    try:
+        if cred_ex_id:
+            # rev_reg_id and cred_rev_id should not be present so we can
+            # safely splat the body
+            await rev_manager.unrevoke_credential_by_cred_ex_id(**body)
+        else:
+            # no cred_ex_id so we can safely splat the body
+            await rev_manager.unrevoke_credential(**body)
+        return web.json_response({})
+    except (
+        RevocationManagerError,
+        AnonCredsRevocationError,
+        StorageError,
+        AnonCredsIssuerError,
+        AnonCredsRegistrationError,
+    ) as err:
+        raise web.HTTPBadRequest(reason=err.roll_up) from err
+
+
 @docs(tags=[TAG_TITLE], summary="Publish pending revocations to ledger")
 @request_schema(PublishRevocationsSchemaAnoncreds())
 @response_schema(PublishRevocationsResultSchemaAnoncreds(), 200, description="")
@@ -1067,6 +1123,7 @@ async def register(app: web.Application):
     app.add_routes(
         [
             web.post("/anoncreds/revocation/revoke", revoke),
+            web.post("/anoncreds/revocation/unrevoke", unrevoke),
             web.post("/anoncreds/revocation/publish-revocations", publish_revocations),
             web.get(
                 "/anoncreds/revocation/credential-record",

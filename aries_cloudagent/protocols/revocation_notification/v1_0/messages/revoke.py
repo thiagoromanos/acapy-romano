@@ -1,5 +1,7 @@
 """Revoke message."""
 
+from typing import Optional
+
 from marshmallow import fields
 
 from .....messaging.agent_message import AgentMessage, AgentMessageSchema
@@ -19,12 +21,20 @@ class Revoke(AgentMessage):
         message_type = REVOKE
         schema_class = "RevokeSchema"
 
-    def __init__(self, *, thread_id: str, comment: str = None, **kwargs):
+    def __init__(
+        self,
+        *,
+        thread_id: str,
+        comment: str = None,
+        unrevoke: Optional[bool] = None,
+        **kwargs,
+    ):
         """Initialize revoke message."""
         super().__init__(**kwargs)
         # TODO support please ack
         self.thread_id = thread_id
         self.comment = comment
+        self.unrevoke = unrevoke
 
 
 class RevokeSchema(AgentMessageSchema):
@@ -50,4 +60,8 @@ class RevokeSchema(AgentMessageSchema):
         metadata={
             "description": "Human readable information about revocation notification"
         },
+    )
+    unrevoke = fields.Boolean(
+        required=False,
+        metadata={"description": "Is unrevoke message"},
     )

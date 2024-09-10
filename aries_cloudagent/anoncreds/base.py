@@ -186,5 +186,6 @@ class BaseAnonCredsRegistrar(BaseAnonCredsHandler):
         curr_list: RevList,
         revoked: Sequence[int],
         options: Optional[dict] = None,
+        unrevoke: bool = False,
     ) -> RevListResult:
         """Update a revocation list on the registry."""

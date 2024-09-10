@@ -879,6 +879,7 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         curr_list: RevList,
         revoked: Sequence[int],
         options: Optional[dict] = None,
+        unrevoke: bool = False,
     ) -> RevListResult:
         """Update a revocation list."""
         delta, _ = await self.get_revocation_registry_delta(
@@ -886,15 +887,20 @@ class DIDBesuRegistry(BaseAnonCredsResolver, BaseAnonCredsRegistrar):
         )
         delta_list = delta["value"]["revoked"] if delta["value"].get("revoked") else []
         newly_revoked_indices = list(revoked)
-        full_revoked_list = newly_revoked_indices + delta_list
+        if unrevoke:
+            full_revoked_list = set(delta_list) - set(newly_revoked_indices)
+        else:
+            full_revoked_list = newly_revoked_indices + delta_list
         rev_reg_entry = {
             "ver": "1.0",
             "value": {
                 "accum": curr_list.current_accumulator,
                 "prevAccum": prev_list.current_accumulator,
-                "revoked": full_revoked_list,
+                "revoked": list(full_revoked_list),
             },
         }
+
+        print(f"Entry: {rev_reg_entry}")
 
         await self._revoc_reg_entry_with_fix(
             profile, curr_list, rev_reg_def.type, rev_reg_entry

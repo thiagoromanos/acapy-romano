@@ -47,7 +47,7 @@ async def on_revocation_published(profile: Profile, event: Event):
                 rev_reg_id=event.payload["rev_reg_id"],
             )
             records = [record for record in records if record.cred_rev_id in crids]
-
+            LOGGER.debug(f"Records: {records}")
             for record in records:
                 await record.delete_record(session)
                 if should_notify:

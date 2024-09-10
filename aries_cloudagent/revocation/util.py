@@ -1,7 +1,7 @@
 """Revocation utilities."""
 
 import re
-from typing import Sequence
+from typing import Optional, Sequence
 
 from ..core.profile import Profile
 
@@ -63,10 +63,20 @@ async def notify_revocation_published_event(
     profile: Profile,
     rev_reg_id: str,
     crids: Sequence[str],
+    unrevoke: Optional[bool] = None,
 ):
     """Send notification of credential revoked as issuer."""
     topic = f"{REVOCATION_EVENT_PREFIX}{REVOCATION_PUBLISHED_EVENT}::{rev_reg_id}"
-    await profile.notify(topic, {"rev_reg_id": rev_reg_id, "crids": crids})
+    if unrevoke is not None:
+        webhook_payload = {"rev_reg_id": rev_reg_id, "crids": crids}
+    else:
+        webhook_payload = {
+            "rev_reg_id": rev_reg_id,
+            "crids": crids,
+            "unrevoke": unrevoke,
+        }
+
+    await profile.notify(topic, webhook_payload)
 
 
 async def notify_pending_cleared_event(

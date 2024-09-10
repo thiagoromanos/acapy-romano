@@ -107,5 +107,8 @@ class DefaultRevocationSetup(AnonCredsRevocationSetupManager):
     async def on_rev_list(self, profile: Profile, event: RevListFinishedEvent):
         """Handle rev list finished."""
         await notify_revocation_published_event(
-            profile, event.payload.rev_reg_id, event.payload.revoked
+            profile,
+            event.payload.rev_reg_id,
+            event.payload.revoked,
+            event.payload.unrevoke,
         )

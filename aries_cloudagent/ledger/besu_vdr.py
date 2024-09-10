@@ -404,14 +404,6 @@ class BesuVdrLedger(BaseLedger):
 
         return tx_receipt
 
-    async def _getFullDid(self, did):
-        async with self.profile.session() as session:
-            wallet = session.inject(BaseWallet)
-            didInfo = await wallet.get_local_did(did)
-
-        didNs = ":indy_besu" if didInfo.method == INDY2 else ""
-        fullDid = f"did:{didInfo.method.method_name}{didNs}:{did}"
-        return fullDid
 
     async def get_key_for_did(self, did: str) -> str:
         """Get key for did."""
@@ -442,8 +434,7 @@ class BesuVdrLedger(BaseLedger):
     ) -> bool:
         """Return true for now."""
         LOGGER.info(
-            f"Trying to update did {did} setting endpoint to {endpoint}. That's not "
-            "implemented yet"
+            f"Trying to update did {did} setting endpoint to {endpoint}. implementing now."
         )
 
         fullDid = await self._getFullDid(did)
@@ -456,9 +447,177 @@ class BesuVdrLedger(BaseLedger):
         didDocStorage = contract.functions.resolveDid(fullDid).call()
         didDoc = didDocStorage[0]
 
-        self._didDocDictFromTuple(didDoc)
+        didDocObj = self._didDocDictFromTuple(didDoc)
+
+        didDocObj["service"] = [
+            {
+                "id": f"{didDocObj['id']}#service",
+                "serviceType": "service",
+                "serviceEndpoint": endpoint,
+                "accept": [],
+                "routingKeys": [],
+            }
+        ]
+        print(f"didDoc: {didDocObj}")
+        try:
+            call_function = contract.functions.updateDid(didDocObj)
+            tx_receipt = self._send_signed_transaction(call_function, False)
+            LOGGER.debug("Receipt: %s", tx_receipt)
+
+        except Exception as e:
+            print(f"Somethingbad happened here {e}")
+            return False
 
         return True
+
+    async def get_endpoint_for_did(
+        self, did: str, endpoint_type: EndpointType = EndpointType.ENDPOINT
+    ) -> str:
+        """Getting did endpoint."""
+        fullDid = await self._getFullDid(did)
+        address = self.web3.to_checksum_address(
+            self.ledgerConfig.contractAddrs[INDY_DID_REGISTRY]
+        )
+        contract = self.web3.eth.contract(
+            address=address, abi=self.ledgerConfig.contractAbis[INDY_DID_REGISTRY]
+        )
+        didDocStorage = contract.functions.resolveDid(fullDid).call()
+        didDoc = didDocStorage[0]
+
+        didDocObj = self._didDocDictFromTuple(didDoc)
+
+        if len(didDocObj["service"]) == 0:
+            return ""
+        else:
+            return didDocObj["service"][0]["serviceEndpoint"]
+
+    async def get_all_endpoints_for_did(self, did: str) -> dict:
+        """Getting all endpoints there is."""
+        return {"endpoint": {"endpoint": await self.get_endpoint_for_did(did)}}
+
+    async def register_nym(
+        self,
+        did: str,
+        verkey: str,
+        alias: str = None,
+        role: str = None,
+        write_ledger: bool = True,
+        endorser_did: str = None,
+    ) -> Tuple[bool, dict]:
+        raise NotImplementedError
+
+    async def get_nym_role(self, did: str):
+        raise NotImplementedError
+
+    def nym_to_did(self, nym: str) -> str:
+        raise NotImplementedError
+
+    async def rotate_public_did_keypair(self, next_seed: str = None) -> None:
+        raise NotImplementedError
+
+    async def get_wallet_public_did(self) -> DIDInfo:
+        """Fetch the public DID from the wallet."""
+        async with self.profile.session() as session:
+            wallet = session.inject(BaseWallet)
+            return await wallet.get_public_did()
+
+    async def _create_revoc_reg_def_request(
+        self,
+        public_info: DIDInfo,
+        revoc_reg_def: dict,
+        write_ledger: bool = True,
+        endorser_did: str = None,
+    ):
+        raise NotImplementedError
+
+    async def send_revoc_reg_def(
+        self,
+        revoc_reg_def: dict,
+        issuer_did: str = None,
+        write_ledger: bool = True,
+        endorser_did: str = None,
+    ) -> dict:
+        raise NotImplementedError
+
+    async def send_revoc_reg_entry(
+        self,
+        revoc_reg_id: str,
+        revoc_def_type: str,
+        revoc_reg_entry: dict,
+        issuer_did: str = None,
+        write_ledger: bool = True,
+        endorser_did: str = None,
+    ) -> dict:
+        raise NotImplementedError
+
+    async def _create_credential_definition_request(
+        self,
+        public_info: DIDInfo,
+        credential_definition_json: str,
+        write_ledger: bool = True,
+        endorser_did: str = None,
+    ):
+        raise NotImplementedError
+
+    async def _create_schema_request(
+        self,
+        public_info: DIDInfo,
+        schema_json: str,
+        write_ledger: bool = True,
+        endorser_did: str = None,
+    ):
+        """Wont need it."""
+        raise NotImplementedError
+
+    async def get_revoc_reg_entry(
+        self, revoc_reg_id: str, timestamp: int
+    ) -> Tuple[dict, int]:
+        """Not used for anoncreds."""
+        raise NotImplementedError
+
+    async def get_txn_author_agreement(self, reload: bool = False):
+        """Wont be used."""
+        return {"taa_required": False}
+
+    async def fetch_txn_author_agreement(self):
+        """Wont be used."""
+        raise NotImplementedError
+
+    async def accept_txn_author_agreement(
+        self, taa_record: dict, mechanism: str, accept_time: int = None
+    ):
+        """Wont be used."""
+        raise NotImplementedError
+
+    async def get_latest_txn_author_acceptance(self):
+        """Wont be used."""
+        raise NotImplementedError
+
+    async def txn_endorse(self, request_json: str, endorse_did: DIDInfo = None) -> str:
+        """Wont be used."""
+        raise NotImplementedError
+
+    async def txn_submit(
+        self,
+        request_json: str,
+        sign: bool,
+        taa_accept: bool = None,
+        sign_did: DIDInfo = ...,
+        write_ledger: bool = True,
+    ) -> str:
+        """Wont be used."""
+        raise NotImplementedError
+
+    async def _getFullDid(self, did: str):
+        if did.startswith("did:"):
+            return did
+        async with self.profile.session() as session:
+            wallet = session.inject(BaseWallet)
+            didInfo = await wallet.get_local_did(did)
+
+        didNs = ":indy_besu" if didInfo.method == INDY2 else ""
+        fullDid = f"did:{didInfo.method.method_name}{didNs}:{did}"
+        return fullDid
 
     def _didDocDictFromTuple(self, didDoc) -> dict:
         context = []
@@ -577,128 +736,8 @@ class BesuVdrLedger(BaseLedger):
             "assertionMethod": assertionMethod,
             "capabilityInvocation": capabilityInvocation,
             "capabilityDelegation": capabilityDelegation,
+            "keyAgreement": keyAgreement,
             "service": service,
             "alsoKnownAs": alsoKnownAs,
         }
         return didDocument
-
-    async def get_endpoint_for_did(
-        self, did: str, endpoint_type: EndpointType = EndpointType.ENDPOINT
-    ) -> str:
-        raise NotImplementedError
-
-    async def get_all_endpoints_for_did(self, did: str) -> dict:
-        raise NotImplementedError
-
-    async def register_nym(
-        self,
-        did: str,
-        verkey: str,
-        alias: str = None,
-        role: str = None,
-        write_ledger: bool = True,
-        endorser_did: str = None,
-    ) -> Tuple[bool, dict]:
-        raise NotImplementedError
-
-    async def get_nym_role(self, did: str):
-        raise NotImplementedError
-
-    def nym_to_did(self, nym: str) -> str:
-        raise NotImplementedError
-
-    async def rotate_public_did_keypair(self, next_seed: str = None) -> None:
-        raise NotImplementedError
-
-    async def get_wallet_public_did(self) -> DIDInfo:
-        """Fetch the public DID from the wallet."""
-        async with self.profile.session() as session:
-            wallet = session.inject(BaseWallet)
-            return await wallet.get_public_did()
-
-    async def _create_revoc_reg_def_request(
-        self,
-        public_info: DIDInfo,
-        revoc_reg_def: dict,
-        write_ledger: bool = True,
-        endorser_did: str = None,
-    ):
-        raise NotImplementedError
-
-    async def send_revoc_reg_def(
-        self,
-        revoc_reg_def: dict,
-        issuer_did: str = None,
-        write_ledger: bool = True,
-        endorser_did: str = None,
-    ) -> dict:
-        raise NotImplementedError
-
-    async def send_revoc_reg_entry(
-        self,
-        revoc_reg_id: str,
-        revoc_def_type: str,
-        revoc_reg_entry: dict,
-        issuer_did: str = None,
-        write_ledger: bool = True,
-        endorser_did: str = None,
-    ) -> dict:
-        raise NotImplementedError
-
-    async def _create_credential_definition_request(
-        self,
-        public_info: DIDInfo,
-        credential_definition_json: str,
-        write_ledger: bool = True,
-        endorser_did: str = None,
-    ):
-        raise NotImplementedError
-
-    async def _create_schema_request(
-        self,
-        public_info: DIDInfo,
-        schema_json: str,
-        write_ledger: bool = True,
-        endorser_did: str = None,
-    ):
-        """Wont need it."""
-        raise NotImplementedError
-
-    async def get_revoc_reg_entry(
-        self, revoc_reg_id: str, timestamp: int
-    ) -> Tuple[dict, int]:
-        """Not used for anoncreds."""
-        raise NotImplementedError
-
-    async def get_txn_author_agreement(self, reload: bool = False):
-        """Wont be used."""
-        return {"taa_required": False}
-
-    async def fetch_txn_author_agreement(self):
-        """Wont be used."""
-        raise NotImplementedError
-
-    async def accept_txn_author_agreement(
-        self, taa_record: dict, mechanism: str, accept_time: int = None
-    ):
-        """Wont be used."""
-        raise NotImplementedError
-
-    async def get_latest_txn_author_acceptance(self):
-        """Wont be used."""
-        raise NotImplementedError
-
-    async def txn_endorse(self, request_json: str, endorse_did: DIDInfo = None) -> str:
-        """Wont be used."""
-        raise NotImplementedError
-
-    async def txn_submit(
-        self,
-        request_json: str,
-        sign: bool,
-        taa_accept: bool = None,
-        sign_did: DIDInfo = ...,
-        write_ledger: bool = True,
-    ) -> str:
-        """Wont be used."""
-        raise NotImplementedError

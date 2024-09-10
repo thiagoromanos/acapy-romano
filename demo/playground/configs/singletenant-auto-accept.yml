@@ -3,3 +3,47 @@ debug-connections: true
 auto-accept-invites: true
 auto-accept-requests: true
 auto-ping-connection: true
+monitor-ping: true
+public-invites: true
+supress-healthcheck-log: true
+
+# cpqd agents configs
+auto-respond-credential-offer: false
+auto-respond-credential-proposal: false
+auto-respond-credential-request: true
+auto-respond-messages: true
+auto-respond-presentation-proposal: false
+auto-respond-presentation-request: false
+auto-verify-presentation: true
+debug-webhooks: true
+emit-new-didcomm-mime-type: true
+emit-new-didcomm-prefix: true
+preserve-exchange-records: true
+
+# revocation configs
+notify-revocation: true
+monitor-revocation-notification: true
+
+
+tails-server-base-url: http://tails-server:6543
+
+# genesis-url: http://webserver:8000/genesis
+
+# besu-provider-url: http://10.202.77.68:21006
+# account-address: 0xFE3B557E8Fb62b89F4916B721be55cEb828dBd73
+# schema-contract-address: 0x6073e9c8702975dcbe1736e0921ce748f99bd20e
+# private-account-key: 0x8f2a55949038a9610f50fb23b5883af3b4ecb3c3bb792cbcefbd1542c692be63
+# credef-contract-address: 0xAB1d436A6f97f7A0B08CEb700Dae0903Ee6f314B
+# revocation-contract-address: 0x4245CF4518CB2C280f5e9c6a03c90C147F80B4d9
+# indy-did-contract-address: 0x4DEF1dfA07d1C68B0282F323B268E9d26418E776
+
+besu-provider-url: http://rpcnode:8545
+account-address: "0xFE3B557E8Fb62b89F4916B721be55cEb828dBd73"
+private-account-key: "0x8f2a55949038a9610f50fb23b5883af3b4ecb3c3bb792cbcefbd1542c692be63"
+schema-contract-address: "0x0000000000000000000000000000000000005555"
+indy-did-contract-address: "0x0000000000000000000000000000000000003333"
+credef-contract-address: "0x0000000000000000000000000000000000004444"
+revocation-contract-address: "0x0000000000000000000000000000000000017777"
+revocation-list-gas-limit: 0x1fffffffffffff
+
+# drop database "hub-holder-askar-wallet";   drop user hub_holder_acapy; drop database "hub-issuer-askar-wallet";   drop user hub_issuer_acapy; drop database "hub-verifier-askar-wallet"; drop user hub_verifier_acapy; 

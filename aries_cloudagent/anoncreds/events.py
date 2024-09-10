@@ -112,6 +112,7 @@ class RevListFinishedPayload(NamedTuple):
     rev_reg_id: str
     revoked: list
     options: dict
+    unrevoke: bool
 
 
 class RevListFinishedEvent(Event):
@@ -135,9 +136,10 @@ class RevListFinishedEvent(Event):
         rev_reg_id: str,
         revoked: list,
         options: Optional[dict] = None,
+        unrevoke: Optional[bool] = None,
     ):
         """With payload."""
-        payload = RevListFinishedPayload(rev_reg_id, revoked, options)
+        payload = RevListFinishedPayload(rev_reg_id, revoked, options, unrevoke)
         return cls(payload)
 
     @property

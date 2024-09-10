@@ -176,9 +176,16 @@ class AnonCredsRegistry:
         curr_list: RevList,
         revoked: Sequence[int],
         options: Optional[dict] = None,
+        unrevoke: bool = False,
     ) -> RevListResult:
         """Update a revocation list on the registry."""
         registrar = await self._registrar_for_identifier(prev_list.issuer_id)
         return await registrar.update_revocation_list(
-            profile, rev_reg_def, prev_list, curr_list, revoked, options
+            profile,
+            rev_reg_def,
+            prev_list,
+            curr_list,
+            revoked,
+            options,
+            unrevoke,
         )

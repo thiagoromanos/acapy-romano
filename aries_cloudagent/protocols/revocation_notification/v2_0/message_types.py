@@ -2,7 +2,6 @@
 
 from ...didcomm_prefix import DIDCommPrefix
 
-
 SPEC_URI = (
     "https://github.com/hyperledger/aries-rfcs/blob/main/features/"
     "0721-revocation-notification-v2/README.md"
@@ -13,8 +12,12 @@ BASE = f"{PROTOCOL}/{VERSION}"
 
 # Message types
 REVOKE = f"{BASE}/revoke"
+UNREVOKE = f"{BASE}/unrevoke"
 
 PROTOCOL_PACKAGE = "aries_cloudagent.protocols.revocation_notification.v2_0"
 MESSAGE_TYPES = DIDCommPrefix.qualify_all(
-    {REVOKE: f"{PROTOCOL_PACKAGE}.messages.revoke.Revoke"}
+    {
+        REVOKE: f"{PROTOCOL_PACKAGE}.messages.revoke.Revoke",
+        UNREVOKE: f"{PROTOCOL_PACKAGE}.messages.unrevoke.Unrevoke",
+    }
 )

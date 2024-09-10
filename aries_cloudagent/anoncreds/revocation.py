@@ -536,6 +536,7 @@ class AnonCredsRevocation:
         curr: RevList,
         revoked: Sequence[int],
         options: Optional[dict] = None,
+        unrevoke: bool = False,
     ):
         """Publish and update to a revocation list."""
         options = options or {}
@@ -576,7 +577,7 @@ class AnonCredsRevocation:
 
         anoncreds_registry = self.profile.inject(AnonCredsRegistry)
         result = await anoncreds_registry.update_revocation_list(
-            self.profile, rev_reg_def, prev, curr, revoked, options
+            self.profile, rev_reg_def, prev, curr, revoked, options, unrevoke
         )
 
         # # TODO Handle `failed` state
@@ -1253,6 +1254,202 @@ class AnonCredsRevocation:
                         rev_reg_def_private=rev_reg_def_private,
                         issued=None,
                         revoked=list(rev_crids),
+                        timestamp=int(time.time()),
+                    ),
+                )
+            except AnoncredsError as err:
+                raise AnonCredsRevocationError(
+                    "Error updating revocation registry"
+                ) from err
+
+            try:
+                async with self.profile.transaction() as txn:
+                    rev_info_upd = await txn.handle.fetch(
+                        CATEGORY_REV_LIST, revoc_reg_id, for_update=True
+                    )
+                    if not rev_info_upd:
+                        LOGGER.warning(
+                            "Revocation registry missing, skipping update: {}",
+                            revoc_reg_id,
+                        )
+                        updated_list = None
+                        break
+                    tags = rev_info_upd.tags
+                    rev_info_upd = rev_info_upd.value_json
+                    if rev_info_upd != rev_info:
+                        # handle concurrent update to the registry by retrying
+                        continue
+                    rev_info_upd["rev_list"] = updated_list.to_dict()
+                    rev_info_upd["pending"] = (
+                        list(skipped_crids) if skipped_crids else None
+                    )
+                    tags["pending"] = json.dumps(True if skipped_crids else False)
+                    await txn.handle.replace(
+                        CATEGORY_REV_LIST,
+                        revoc_reg_id,
+                        value_json=rev_info_upd,
+                        tags=tags,
+                    )
+                    await txn.commit()
+            except AskarError as err:
+                raise AnonCredsRevocationError(
+                    "Error saving revocation registry"
+                ) from err
+            break
+
+        return RevokeResult(
+            prev=rev_list,
+            curr=RevList.from_native(updated_list) if updated_list else None,
+            revoked=list(rev_crids),
+            failed=[str(rev_id) for rev_id in sorted(failed_crids)],
+        )
+
+    async def unrevoke_pending_credentials(
+        self,
+        revoc_reg_id: str,
+        *,
+        additional_crids: Optional[Sequence[int]] = None,
+        limit_crids: Optional[Sequence[int]] = None,
+    ) -> RevokeResult:
+        """UnRevoke a set of credentials in a revocation registry.
+
+        Args:
+            revoc_reg_id: ID of the revocation registry
+            additional_crids: sequences of additional credential indexes to revoke
+            limit_crids: a sequence of credential indexes to limit revocation to
+                If None, all pending revocations will be published.
+                If given, the intersection of pending and limit crids will be published.
+
+        Returns:
+            Tuple with the update revocation list, list of cred rev ids not revoked
+
+        """
+        updated_list = None
+        failed_crids = set()
+        max_attempt = 5
+        attempt = 0
+
+        while True:
+            attempt += 1
+            if attempt >= max_attempt:
+                raise AnonCredsRevocationError(
+                    "Repeated conflict attempting to update registry"
+                )
+            try:
+                async with self.profile.session() as session:
+                    rev_reg_def_entry = await session.handle.fetch(
+                        CATEGORY_REV_REG_DEF, revoc_reg_id
+                    )
+                    rev_list_entry = await session.handle.fetch(
+                        CATEGORY_REV_LIST, revoc_reg_id
+                    )
+                    rev_reg_def_private_entry = await session.handle.fetch(
+                        CATEGORY_REV_REG_DEF_PRIVATE, revoc_reg_id
+                    )
+            except AskarError as err:
+                raise AnonCredsRevocationError(
+                    "Error retrieving revocation registry"
+                ) from err
+
+            if (
+                not rev_reg_def_entry
+                or not rev_list_entry
+                or not rev_reg_def_private_entry
+            ):
+                raise AnonCredsRevocationError(
+                    (
+                        "Missing required revocation registry data: "
+                        "revocation registry definition"
+                        if not rev_reg_def_entry
+                        else ""
+                    ),
+                    "revocation list" if not rev_list_entry else "",
+                    (
+                        "revocation registry private definition"
+                        if not rev_reg_def_private_entry
+                        else ""
+                    ),
+                )
+
+            try:
+                async with self.profile.session() as session:
+                    cred_def_entry = await session.handle.fetch(
+                        CATEGORY_CRED_DEF, rev_reg_def_entry.value_json["credDefId"]
+                    )
+            except AskarError as err:
+                raise AnonCredsRevocationError(
+                    f"Error retrieving cred def {rev_reg_def_entry.value_json['credDefId']}"  # noqa: E501
+                ) from err
+
+            try:
+                # TODO This is a little rough; stored tails location will have public uri
+                # but library needs local tails location
+                rev_reg_def = RevRegDef.deserialize(rev_reg_def_entry.value_json)
+                rev_reg_def.value.tails_location = self.get_local_tails_path(
+                    rev_reg_def
+                )
+                cred_def = CredDef.deserialize(cred_def_entry.value_json)
+                rev_reg_def_private = RevocationRegistryDefinitionPrivate.load(
+                    rev_reg_def_private_entry.value_json
+                )
+            except AnoncredsError as err:
+                raise AnonCredsRevocationError(
+                    "Error loading revocation registry definition"
+                ) from err
+
+            rev_crids = set()
+            failed_crids = set()
+            max_cred_num = rev_reg_def.value.max_cred_num
+            rev_info = rev_list_entry.value_json
+            cred_revoc_ids = (rev_info["pending"] or []) + (additional_crids or [])
+            rev_list = RevList.deserialize(rev_info["rev_list"])
+
+            for rev_id in cred_revoc_ids:
+                if rev_id < 1 or rev_id > max_cred_num:
+                    LOGGER.error(
+                        "Skipping requested credential revocation"
+                        "on rev reg id %s, cred rev id=%s not in range",
+                        revoc_reg_id,
+                        rev_id,
+                    )
+                    failed_crids.add(rev_id)
+                elif rev_id >= rev_info["next_index"]:
+                    LOGGER.warning(
+                        "Skipping requested credential revocation"
+                        "on rev reg id %s, cred rev id=%s not yet issued",
+                        revoc_reg_id,
+                        rev_id,
+                    )
+                    failed_crids.add(rev_id)
+                elif rev_list.revocation_list[rev_id] == 0:
+                    LOGGER.warning(
+                        "Skipping requested credential unrevocation"
+                        "on rev reg id %s, cred rev id=%s is not revoked",
+                        revoc_reg_id,
+                        rev_id,
+                    )
+                    failed_crids.add(rev_id)
+                else:
+                    rev_crids.add(rev_id)
+
+            if not rev_crids:
+                break
+
+            if limit_crids is None:
+                skipped_crids = set()
+            else:
+                skipped_crids = rev_crids - set(limit_crids)
+            rev_crids = rev_crids - skipped_crids
+
+            try:
+                updated_list = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: rev_list.to_native().update(
+                        cred_def=cred_def.to_native(),
+                        rev_reg_def=rev_reg_def.to_native(),
+                        rev_reg_def_private=rev_reg_def_private,
+                        issued=list(rev_crids),
+                        revoked=None,
                         timestamp=int(time.time()),
                     ),
                 )

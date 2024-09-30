@@ -169,6 +169,7 @@ class RevocationManager:
                 comment=comment,
                 version=notify_version,
                 unrevoke=False,
+                revocation_format="anoncreds",
             )
             async with self._profile.session() as session:
                 await rev_notify_rec.save(session, reason="New revocation notification")
@@ -233,6 +234,7 @@ class RevocationManager:
                 comment=comment,
                 version=notify_version,
                 unrevoke=True,
+                revocation_format="anoncreds",
             )
             async with self._profile.session() as session:
                 await rev_notify_rec.save(

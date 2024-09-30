@@ -416,7 +416,7 @@ class RevokeRequestSchemaAnoncreds(CredRevRecordQueryStringSchema):
         metadata={"description": "Send a notification to the credential recipient"},
     )
     notify_version = fields.String(
-        validate=validate.OneOf(["v1_0", "v2_0"]),
+        validate=validate.OneOf(["v1_0", "v2_0", "v2_1"]),
         required=False,
         metadata={
             "description": (

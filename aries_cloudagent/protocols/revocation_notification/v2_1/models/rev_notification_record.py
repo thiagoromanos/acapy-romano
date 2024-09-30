@@ -5,6 +5,10 @@ from typing import Optional, Sequence
 from marshmallow import fields
 from marshmallow.utils import EXCLUDE
 
+from aries_cloudagent.protocols.revocation_notification.v2_0.messages.unrevoke import (
+    Unrevoke,
+)
+
 from .....core.profile import ProfileSession
 from .....messaging.models.base_record import BaseRecord, BaseRecordSchema
 from .....messaging.valid import (
@@ -46,6 +50,7 @@ class RevNotificationRecord(BaseRecord):
         thread_id: str = None,
         comment: str = None,
         version: str = None,
+        unrevoke: bool = None,
         revocation_format: str = "indy-anoncreds",
         **kwargs,
     ):
@@ -57,6 +62,7 @@ class RevNotificationRecord(BaseRecord):
         self.thread_id = thread_id
         self.comment = comment
         self.version = version
+        self.unrevoke = unrevoke
         self.revocation_format = revocation_format
 
     @property
@@ -67,7 +73,9 @@ class RevNotificationRecord(BaseRecord):
     @property
     def record_value(self) -> dict:
         """Return record value."""
-        return {prop: getattr(self, prop) for prop in ("thread_id", "comment")}
+        return {
+            prop: getattr(self, prop) for prop in ("thread_id", "comment", "unrevoke")
+        }
 
     @classmethod
     async def query_by_ids(
@@ -84,7 +92,7 @@ class RevNotificationRecord(BaseRecord):
             rev_reg_id: the rev reg id by which to filter
         """
         tag_filter = {
-            **{"version": "v2_0"},
+            **{"version": "v2_1"},
             **{"cred_rev_id": cred_rev_id for _ in [""] if cred_rev_id},
             **{"rev_reg_id": rev_reg_id for _ in [""] if rev_reg_id},
         }
@@ -126,11 +134,18 @@ class RevNotificationRecord(BaseRecord):
                 "No thread ID set on revocation notification record, "
                 "cannot create message"
             )
-        return Revoke(
-            revocation_format=self.revocation_format,
-            credential_id=f"{self.rev_reg_id}::{self.cred_rev_id}",
-            comment=self.comment,
-        )
+        if self.unrevoke:
+            return Unrevoke(
+                revocation_format=self.revocation_format,
+                credential_id=f"{self.rev_reg_id}::{self.cred_rev_id}",
+                comment=self.comment,
+            )
+        else:
+            return Revoke(
+                revocation_format=self.revocation_format,
+                credential_id=f"{self.rev_reg_id}::{self.cred_rev_id}",
+                comment=self.comment,
+            )
 
 
 class RevNotificationRecordSchema(BaseRecordSchema):
@@ -187,4 +202,8 @@ class RevNotificationRecordSchema(BaseRecordSchema):
     version = fields.Str(
         required=False,
         metadata={"description": "Version of Revocation Notification to send out"},
+    )
+    unrevoke = fields.Bool(
+        required=False,
+        metadata={"description": "If it is Unrevoked"},
     )

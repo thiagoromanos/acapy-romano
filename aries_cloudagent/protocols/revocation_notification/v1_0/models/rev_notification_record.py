@@ -47,6 +47,7 @@ class RevNotificationRecord(BaseRecord):
         comment: str = None,
         version: str = None,
         unrevoke: Optional[bool] = None,
+        revocation_format: str = None,
         **kwargs,
     ):
         """Construct record."""
@@ -58,6 +59,7 @@ class RevNotificationRecord(BaseRecord):
         self.comment = comment
         self.version = version
         self.unrevoke = unrevoke
+        self.revocation_format = revocation_format
 
     @property
     def revocation_notification_id(self) -> Optional[str]:

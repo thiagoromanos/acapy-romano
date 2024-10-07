@@ -190,6 +190,12 @@ class RevocationManager:
                     result.revoked,
                     options=options,
                 )
+            else:
+                if notify:
+                    async with self._profile.session() as session:
+                        # if something went wrong with the revocation,
+                        # remove the notification
+                        await rev_notify_rec.delete_record(session)
 
         else:
             await revoc.mark_pending_revocations(rev_reg_id, int(cred_rev_id))
@@ -258,6 +264,12 @@ class RevocationManager:
                     options=options,
                     unrevoke=True,
                 )
+            else:
+                if notify:
+                    async with self._profile.session() as session:
+                        # if something went wrong with the revocation,
+                        # remove the notification
+                        await rev_notify_rec.delete_record(session)
 
         else:
             await revoc.mark_pending_revocations(rev_reg_id, int(cred_rev_id))

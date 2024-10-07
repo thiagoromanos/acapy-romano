@@ -70,7 +70,8 @@ class RevNotificationRecord(BaseRecord):
     def record_value(self) -> dict:
         """Return record value."""
         return {
-            prop: getattr(self, prop) for prop in ("thread_id", "comment", "unrevoke")
+            prop: getattr(self, prop)
+            for prop in ("thread_id", "comment", "revocation_format", "unrevoke")
         }
 
     @classmethod

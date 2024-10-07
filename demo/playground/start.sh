@@ -34,7 +34,7 @@ aca-py start \
     --inbound-transport http 0.0.0.0 ${AGENT_HTTP_IN_PORT} \
     --outbound-transport http \
     --emit-new-didcomm-prefix \
-    --wallet-type askar-anoncreds \
+    --wallet-type askar \
     --wallet-storage-type postgres_storage \
     --admin-insecure-mode \
     --admin 0.0.0.0 ${AGENT_HTTP_ADMIN_PORT} \

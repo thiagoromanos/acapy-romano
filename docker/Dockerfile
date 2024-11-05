@@ -1,4 +1,4 @@
-ARG python_version=3.9.18
+ARG python_version=3.9.20
 FROM python:${python_version}-slim-bullseye AS build
 
 WORKDIR /src
@@ -102,6 +102,7 @@ RUN aries_cloudagent_package=$(find ./ -name "aries_cloudagent*.whl" | head -n 1
 # Clean-up unneccessary build dependencies and reduce final image size
 USER root
 RUN apt-get purge -y --auto-remove build-essential
+RUN dpkg -r --force-all apt apt-get && dpkg -r --force-all debconf dpkg
 
 USER $user
 

@@ -375,7 +375,7 @@ class BesuVdrLedger(BaseLedger):
 
     def _send_signed_transaction(
         self, contractFunction: ContractFunction, includeGasInTx: bool = True
-    ) -> TxReceipt:
+    ) -> TxReceipt:        
         nonce = self.web3.eth.get_transaction_count(self.ledgerConfig.trusteeAccount)
         chain_id = self.web3.eth.chain_id
         txParams = {
@@ -385,7 +385,7 @@ class BesuVdrLedger(BaseLedger):
             "gasPrice": self.web3.eth.gas_price,
         }
         if includeGasInTx:
-            txParams["gas"] = 3000000
+            txParams["gas"] = 3000000        
         tx = contractFunction.build_transaction(txParams)
         # Sign transaction
         signed_tx = self.web3.eth.account.sign_transaction(
@@ -393,17 +393,17 @@ class BesuVdrLedger(BaseLedger):
         )
 
         # Send transaction
-        LOGGER.debug("Transaction: %s", signed_tx.rawTransaction)
+        # LOGGER.debug("Transaction: %s", signed_tx.rawTransaction))
+        LOGGER.debug("Sending contract function %s: tuple %s", contractFunction.fn_name, contractFunction.arguments)
         send_tx = self.web3.eth.send_raw_transaction(signed_tx.rawTransaction)
 
         # Wait for transaction receipt
-        tx_receipt = self.web3.eth.wait_for_transaction_receipt(send_tx)
+        tx_receipt = self.web3.eth.wait_for_transaction_receipt(transaction_hash=send_tx, poll_latency=1.0)
 
         if tx_receipt["status"] == 0:
             raise LedgerError("Transaction rollback")
 
         return tx_receipt
-
 
     async def get_key_for_did(self, did: str) -> str:
         """Get key for did."""
@@ -493,7 +493,7 @@ class BesuVdrLedger(BaseLedger):
 
     async def get_all_endpoints_for_did(self, did: str) -> dict:
         """Getting all endpoints there is."""
-        return {"endpoint": {"endpoint": await self.get_endpoint_for_did(did)}}
+        return {"endpoint": await self.get_endpoint_for_did(did)}
 
     async def register_nym(
         self,

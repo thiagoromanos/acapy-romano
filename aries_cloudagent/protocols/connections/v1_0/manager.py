@@ -1,8 +1,8 @@
 """Classes to manage connections."""
 
 import logging
-from typing import Optional, Sequence, Tuple, Union, cast
 import warnings
+from typing import Optional, Sequence, Tuple, Union, cast
 
 from ....connections.base_manager import BaseConnectionManager
 from ....connections.models.conn_record import ConnRecord
@@ -15,7 +15,7 @@ from ....messaging.valid import IndyDID
 from ....storage.error import StorageNotFoundError
 from ....transport.inbound.receipt import MessageReceipt
 from ....wallet.base import BaseWallet
-from ....wallet.did_method import SOV
+from ....wallet.did_method import INDY2, SOV
 from ....wallet.key_type import ED25519
 from ...coordinate_mediation.v1_0.manager import MediationManager
 from .message_types import ARIES_PROTOCOL as CONN_PROTO
@@ -180,7 +180,10 @@ class ConnectionManager(BaseConnectionManager):
             # FIXME - allow ledger instance to format public DID with prefix?
             public_did_did = public_did.did
             if bool(IndyDID.PATTERN.match(public_did_did)):
-                public_did_did = f"did:sov:{public_did.did}"
+                if public_did.method == INDY2:
+                    public_did_did = f"did:indy2:indy_besu:{public_did.did}"
+                else:
+                    public_did_did = f"did:sov:{public_did.did}"
 
             invitation = ConnectionInvitation(
                 label=my_label, did=public_did_did, image_url=image_url

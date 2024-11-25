@@ -41,6 +41,7 @@ from ..messaging.valid import (
     NON_SD_LIST_VALIDATE,
     SD_JWT_EXAMPLE,
     SD_JWT_VALIDATE,
+    Indy2DID,
     IndyDID,
     StrOrDictField,
     Uri,
@@ -814,7 +815,7 @@ async def promote_wallet_public_did(
     info: DIDInfo = None
     endorser_did = None
 
-    is_indy_did = bool(IndyDID.PATTERN.match(did))
+    is_indy_did = bool(IndyDID.PATTERN.match(did)) or bool(Indy2DID.PATTERN.match(did))
     # write only Indy DID
     write_ledger = is_indy_did and write_ledger
     is_ctx_admin_request = True

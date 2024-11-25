@@ -4,7 +4,6 @@ import json
 import re
 
 from base58 import alphabet
-
 from marshmallow.exceptions import ValidationError
 from marshmallow.fields import Field
 from marshmallow.validate import OneOf, Range, Regexp, Validator
@@ -338,13 +337,28 @@ class IndyDID(Regexp):
     """Validate value against indy DID."""
 
     EXAMPLE = "WgWxqztrNooG92RXvxSTWv"
-    PATTERN = re.compile(rf"^(did:sov:)?[{B58}]{{21,22}}$|^(did:indy2)?:.+:[{B58}]{{21,22}}$")
+    PATTERN = re.compile(rf"^(did:sov:)?[{B58}]{{21,22}}$")
 
     def __init__(self):
         """Initialize the instance."""
 
         super().__init__(
             IndyDID.PATTERN,
+            error="Value {input} is not an indy decentralized identifier (DID)",
+        )
+
+
+class Indy2DID(Regexp):
+    """Validate value against indy2 DID."""
+
+    EXAMPLE = "WgWxqztrNooG92RXvxSTWv"
+    PATTERN = re.compile(rf"^(did:indy2)?:.+:[{B58}]{{21,22}}$")
+
+    def __init__(self):
+        """Initialize the instance."""
+
+        super().__init__(
+            Indy2DID.PATTERN,
             error="Value {input} is not an indy decentralized identifier (DID)",
         )
 
@@ -423,7 +437,8 @@ class RoutingKey(Regexp):
             ),
         )
 
-# Modifiquei aqui 
+
+# Modifiquei aqui
 class IndyCredDefId(Regexp):
     """Validate value against indy credential definition identifier specification."""
 
@@ -433,7 +448,7 @@ class IndyCredDefId(Regexp):
         f":3"  # cred def id marker
         f":CL"  # sig alg
         rf":(([1-9][0-9]*)|([{B58}]{{21,22}}:2:.+:[0-9.]+))"  # schema txn / id
-        f":(.+)?$|"  # tag    
+        f":(.+)?$|"  # tag
         rf"^((did:indy2)?:.+:[{B58}]{{21,22}})"  # issuer DID
         f"/anoncreds/v0/CLAIM_DEF/"  # cred def id marker
         # f":CL"  # sig alg
@@ -489,12 +504,12 @@ class IndyRevRegId(Regexp):
         rf"([{B58}]{{21,22}}):3:"
         rf"CL:(([1-9][0-9]*)|([{B58}]{{21,22}}:2:.+:[0-9.]+))(:.+)?:"
         rf"CL_ACCUM:(.+$)|^((did:indy2)?:.+:[{B58}]{{21,22}})"  # issuer DID
-            f"\/anoncreds\/v0\/REV_REG_DEF\/"  # cred def id marker
-            rf"((did:indy2)?:.+:[{B58}]{{21,22}})"  # issuer DID
-            f"\/anoncreds\/v0\/CLAIM_DEF\/"  # cred def id marker
-            # f":CL"  # sig alg
-            rf"((did:indy2)?:.+:[{B58}]{{21,22}}\/anoncreds\/v0\/SCHEMA\/.+\/[0-9.]+)"  # schema txn / id
-            f"\/(.+)?(:|\/)CL_ACCUM(:|\/).+$"
+        f"\/anoncreds\/v0\/REV_REG_DEF\/"  # cred def id marker
+        rf"((did:indy2)?:.+:[{B58}]{{21,22}})"  # issuer DID
+        f"\/anoncreds\/v0\/CLAIM_DEF\/"  # cred def id marker
+        # f":CL"  # sig alg
+        rf"((did:indy2)?:.+:[{B58}]{{21,22}}\/anoncreds\/v0\/SCHEMA\/.+\/[0-9.]+)"  # schema txn / id
+        f"\/(.+)?(:|\/)CL_ACCUM(:|\/).+$"
     )
 
     def __init__(self):

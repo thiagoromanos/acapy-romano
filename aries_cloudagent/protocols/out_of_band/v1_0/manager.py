@@ -3,8 +3,8 @@
 import asyncio
 import logging
 import re
-from typing import List, Mapping, NamedTuple, Optional, Sequence, Text, Union
 import uuid
+from typing import List, Mapping, NamedTuple, Optional, Sequence, Text, Union
 
 from aries_cloudagent.protocols.coordinate_mediation.v1_0.route_manager import (
     RouteManager,
@@ -26,7 +26,7 @@ from ....storage.error import StorageNotFoundError
 from ....transport.inbound.receipt import MessageReceipt
 from ....wallet.base import BaseWallet
 from ....wallet.did_info import INVITATION_REUSE_KEY, DIDInfo
-from ....wallet.did_method import PEER2, PEER4
+from ....wallet.did_method import INDY2, PEER2, PEER4
 from ....wallet.key_type import ED25519
 from ...connections.v1_0.manager import ConnectionManager
 from ...connections.v1_0.messages.connection_invitation import ConnectionInvitation
@@ -42,8 +42,8 @@ from .messages.invitation import HSProto, InvitationMessage
 from .messages.problem_report import OOBProblemReport
 from .messages.reuse import HandshakeReuse
 from .messages.reuse_accept import HandshakeReuseAccept
-from .messages.service import Service as ServiceMessage
 from .messages.service import Service
+from .messages.service import Service as ServiceMessage
 from .models.invitation import InvitationRecord
 from .models.oob_record import OobRecord
 
@@ -353,6 +353,7 @@ class InvitationCreator:
         mediation_record: Optional[MediationRecord],
     ) -> CreateResult:
         """Handle use_did invitation creation."""
+
         invi_msg = InvitationMessage(
             _id=self.msg_id,
             label=self.my_label,
@@ -363,6 +364,7 @@ class InvitationCreator:
             version=self.version,
             image_url=self.image_url,
         )
+
         endpoint, recipient_keys, routing_keys = await self.oob.resolve_invitation(
             did_info.did
         )
@@ -412,8 +414,11 @@ class InvitationCreator:
             )
 
         if bool(IndyDID.PATTERN.match(public_did.did)):
+            did = f"did:sov:{public_did.did}"
+            if public_did.method == INDY2:
+                did = f"did:indy2:indy_besu:{public_did.did}"
             public_did = DIDInfo(
-                did=f"did:sov:{public_did.did}",
+                did=did,
                 verkey=public_did.verkey,
                 metadata=public_did.metadata,
                 method=public_did.method,
@@ -1048,7 +1053,7 @@ class OutOfBandManager(BaseConnectionManager):
             # in an out-of-band message (RFC 0434).
             # OR did:peer:2 or did:peer:4.
 
-            if service.startswith("did:peer"):
+            if service.startswith("did:peer") or service.startswith("did:indy2"):
                 public_did = service
                 if public_did.startswith("did:peer:4"):
                     public_did = self.long_did_peer_to_short(public_did)

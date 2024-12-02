@@ -6,6 +6,7 @@ import logging
 
 from typing import List, Optional, Sequence, Tuple, Union
 
+from Crypto.Hash import MD5
 from aries_askar import (
     AskarError,
     AskarErrorCode,
@@ -14,7 +15,7 @@ from aries_askar import (
     KeyAlg,
     SeedMethod,
 )
-
+from ..vault import encrypt, decrypt, check_hsm_key
 from .did_parameters_validation import DIDParametersValidation
 from ..askar.didcomm.v1 import pack_message, unpack_message
 from ..askar.profile import AskarProfileSession
@@ -23,6 +24,7 @@ from ..ledger.endpoint_type import EndpointType
 from ..ledger.error import LedgerConfigError
 from ..storage.askar import AskarStorage
 from ..storage.base import StorageRecord, StorageDuplicateError, StorageNotFoundError
+from ..dinamo import bindings
 
 from .base import BaseWallet, KeyInfo, DIDInfo
 from .crypto import (
@@ -30,6 +32,7 @@ from .crypto import (
     validate_seed,
     verify_signed_message,
 )
+from .did_info import INVITATION_REUSE_KEY
 from .did_method import SOV, DIDMethod, DIDMethods
 from .error import WalletError, WalletDuplicateError, WalletNotFoundError
 from .key_type import BLS12381G2, ED25519, KeyType, KeyTypes
@@ -50,7 +53,7 @@ class AskarWallet(BaseWallet):
 
         Args:
             session: The Askar profile session instance to use
-        """
+        """        
         self._session = session
 
     @property
@@ -106,6 +109,8 @@ class AskarWallet(BaseWallet):
         try:
             keypair = _create_keypair(key_type, seed)
             verkey = bytes_to_b58(keypair.get_public_bytes())
+            # Call vault encrypt function here
+            print("TAO CHAMANDO")
             await self._session.handle.insert_key(
                 verkey, keypair, metadata=json.dumps(metadata)
             )
@@ -136,6 +141,7 @@ class AskarWallet(BaseWallet):
         if not verkey:
             raise WalletNotFoundError("No key identifier provided")
         key = await self._session.handle.fetch_key(verkey)
+        
         if not key:
             raise WalletNotFoundError("Unknown key: {}".format(verkey))
         metadata = json.loads(key.metadata or "{}")
@@ -200,15 +206,28 @@ class AskarWallet(BaseWallet):
             metadata = {}
 
         try:
-            keypair = _create_keypair(key_type, seed)
-            verkey_bytes = keypair.get_public_bytes()
+            keypair = _create_keypair(key_type, seed)    
+            verkey_bytes = keypair.get_public_bytes()            
             verkey = bytes_to_b58(verkey_bytes)
-
             did = did_validation.validate_or_derive_did(
                 method, key_type, verkey_bytes, did
             )
-
+            # Encrypt private key 
+            # Create another ED key using AES output
+            # Store the encrypted key instead
+            seed = self._session.settings.get('wallet.seed')
+            nonce = seed[:24] # 12-byte nonce
+            key = MD5.new(seed.encode()).hexdigest()
+            print(f"ORIG> {keypair.get_secret_bytes()}")
+            sk = encrypt(keypair.get_secret_bytes(), nonce=nonce.encode(), key=key.encode()) 
+            # Create a wrapped key
+            keypair = _create_keypair(key_type, sk)    # comment for disable it
+            print(f"ENC> {keypair.get_secret_bytes()}")
+            # update metadata
+            metadata['hsm_enabled'] = True  # comment for disable it
             try:
+                # MATEUS (CPQD - 2024) 
+                # Remove private key be
                 await self._session.handle.insert_key(
                     verkey, keypair, metadata=json.dumps(metadata)
                 )
@@ -230,21 +249,25 @@ class AskarWallet(BaseWallet):
                         CATEGORY_DID, did, value_json=did_info, tags=item.tags
                     )
             else:
+                value_json = {
+                    "did": did,
+                    "method": method.method_name,
+                    "verkey": verkey,
+                    "verkey_type": key_type.key_type,
+                    "metadata": metadata,
+                }
+                tags = {
+                    "method": method.method_name,
+                    "verkey": verkey,
+                    "verkey_type": key_type.key_type,
+                }
+                if INVITATION_REUSE_KEY in metadata:
+                    tags[INVITATION_REUSE_KEY] = "true"
                 await self._session.handle.insert(
                     CATEGORY_DID,
                     did,
-                    value_json={
-                        "did": did,
-                        "method": method.method_name,
-                        "verkey": verkey,
-                        "verkey_type": key_type.key_type,
-                        "metadata": metadata,
-                    },
-                    tags={
-                        "method": method.method_name,
-                        "verkey": verkey,
-                        "verkey_type": key_type.key_type,
-                    },
+                    value_json=value_json,
+                    tags=tags,
                 )
 
         except AskarError as err:
@@ -273,21 +296,25 @@ class AskarWallet(BaseWallet):
             if item:
                 raise WalletDuplicateError("DID already present in wallet")
             else:
+                value_json = {
+                    "did": did_info.did,
+                    "method": did_info.method.method_name,
+                    "verkey": did_info.verkey,
+                    "verkey_type": did_info.key_type.key_type,
+                    "metadata": did_info.metadata,
+                }
+                tags = {
+                    "method": did_info.method.method_name,
+                    "verkey": did_info.verkey,
+                    "verkey_type": did_info.key_type.key_type,
+                }
+                if INVITATION_REUSE_KEY in did_info.metadata:
+                    tags[INVITATION_REUSE_KEY] = "true"
                 await self._session.handle.insert(
                     CATEGORY_DID,
                     did_info.did,
-                    value_json={
-                        "did": did_info.did,
-                        "method": did_info.method.method_name,
-                        "verkey": did_info.verkey,
-                        "verkey_type": did_info.key_type.key_type,
-                        "metadata": did_info.metadata,
-                    },
-                    tags={
-                        "method": did_info.method.method_name,
-                        "verkey": did_info.verkey,
-                        "verkey_type": did_info.key_type.key_type,
-                    },
+                    value_json=value_json,
+                    tags=tags,
                 )
         except AskarError as err:
             raise WalletError("Error when storing DID") from err
@@ -348,12 +375,21 @@ class AskarWallet(BaseWallet):
 
         try:
             dids = await self._session.handle.fetch_all(
-                CATEGORY_DID, {"verkey": verkey}, limit=1
+                CATEGORY_DID, {"verkey": verkey}
             )
         except AskarError as err:
             raise WalletError("Error when fetching local DID for verkey") from err
         if dids:
-            return self._load_did_entry(dids[0])
+            ret_did = dids[0]
+            ret_did_info = ret_did.value_json
+            if len(dids) > 1 and ret_did_info["did"].startswith("did:peer:4"):
+                # if it is a peer:did:4 make sure we are using the short version
+                other_did = dids[1]  # assume only 2
+                other_did_info = other_did.value_json
+                if len(other_did_info["did"]) < len(ret_did_info["did"]):
+                    ret_did = other_did
+                    ret_did_info = other_did.value_json
+            return self._load_did_entry(ret_did)
         raise WalletNotFoundError("No DID defined for verkey: {}".format(verkey))
 
     async def replace_local_did_metadata(self, did: str, metadata: dict):
@@ -635,9 +671,17 @@ class AskarWallet(BaseWallet):
             raise WalletError("Verkey not provided")
         try:
             keypair = await self._session.handle.fetch_key(from_verkey)
+           
             if not keypair:
                 raise WalletNotFoundError("Missing key for sign operation")
-            key = keypair.key
+            seed = self._session.settings.get('wallet.seed')
+            key = check_hsm_key(keypair, seed)
+            # if meta.get("hsm_enabled"):
+            #     seed = self._session.settings.get('wallet.seed')
+            #     nonce = seed[:24] # 12-byte nonce
+            #     _hash = MD5.new(seed.encode()).hexdigest()                    
+            #     sk = decrypt(ciphertext=key.get_secret_bytes(), nonce=nonce.encode(), key=_hash.encode()) 
+            #     key = Key.from_secret_bytes(KeyAlg.ED25519,sk)
             if key.algorithm == KeyAlg.BLS12_381_G2:
                 # for now - must extract the key and use sign_message
                 return sign_message(
@@ -647,7 +691,19 @@ class AskarWallet(BaseWallet):
                 )
 
             else:
-                return key.sign_message(message)
+                # print(f">>> ASKAR: {message} - {from_verkey}")
+                # Mateus (CPQD - 2024)
+                # signing using HSM
+                # hSession = bindings.do_connection(HOST_ADDR="", USER_ID="cpqd", USER_PWD="")                          
+                # hHash = bindings.create_hash(hSession, 255) # for hash signing
+                # bindings.hash_data(hHash, message)
+                # key_id = self.session.settings.get('wallet.seed')
+                # phKey = bindings.get_key(hSession, key_id)                
+                # sig = bindings.sign_hash(hHash, phKey)
+                
+                sig = key.sign_message(message)
+                return sig
+                # return key.sign_message(message)
         except AskarError as err:
             raise WalletError("Exception when signing message") from err
 
@@ -725,7 +781,9 @@ class AskarWallet(BaseWallet):
                 from_key_entry = await self._session.handle.fetch_key(from_verkey)
                 if not from_key_entry:
                     raise WalletNotFoundError("Missing key for pack operation")
-                from_key = from_key_entry.key
+                seed = self._session.settings.get('wallet.seed')
+                # Verifica se a chave foi encriptada usando o HSM
+                from_key = check_hsm_key(from_key_entry, seed)                
             else:
                 from_key = None
             return await asyncio.get_event_loop().run_in_executor(
@@ -751,11 +809,12 @@ class AskarWallet(BaseWallet):
         if not enc_message:
             raise WalletError("Message not provided")
         try:
+            seed = self._session.settings.get('wallet.seed')
             (
                 unpacked_json,
                 recipient,
                 sender,
-            ) = await unpack_message(self._session.handle, enc_message)
+            ) = await unpack_message(self._session.handle, enc_message, seed)
         except AskarError as err:
             raise WalletError("Exception when unpacking message") from err
         return unpacked_json.decode("utf-8"), sender, recipient
@@ -792,8 +851,16 @@ def _create_keypair(key_type: KeyType, seed: Union[str, bytes, None] = None) -> 
     if seed:
         try:
             if key_type == ED25519:
-                # not a seed - it is the secret key
+                # not a seed - it is the secret key                
                 seed = validate_seed(seed)
+                # Mateus - (CPQD, 2024) 
+                # Here Im using HSM for key generation
+                # hSession = bindings.do_connection(HOST_ADDR="", USER_ID="cpqd", USER_PWD="18")          
+                # bindings.gen_key(hSession, seed)                
+                # result, key_bytes = bindings.get_pb_key(hSession, seed)   
+                # bindings.create_ed2x(hSession, seed, bytes_to_b58(key_bytes)[:32])             
+                # keypair = Key.from_public_bytes(KeyAlg.ED25519, key_bytes)                
+                # return keypair
                 return Key.from_secret_bytes(alg, seed)
             else:
                 return Key.from_seed(alg, seed, method=method)

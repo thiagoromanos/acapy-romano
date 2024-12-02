@@ -27,6 +27,7 @@ from .base import (
     AnonCredsSchemaAlreadyExists,
     BaseAnonCredsError,
 )
+from .error_messages import ANONCREDS_PROFILE_REQUIRED_MSG
 from .events import CredDefFinishedEvent
 from .models.anoncreds_cred_def import CredDef, CredDefResult
 from .models.anoncreds_schema import AnonCredsSchema, SchemaResult, SchemaState
@@ -97,7 +98,7 @@ class AnonCredsIssuer:
     def profile(self) -> AskarAnoncredsProfile:
         """Accessor for the profile instance."""
         if not isinstance(self._profile, AskarAnoncredsProfile):
-            raise ValueError("AnonCreds interface requires AskarAnoncreds")
+            raise ValueError(ANONCREDS_PROFILE_REQUIRED_MSG)
 
         return self._profile
 
@@ -312,6 +313,15 @@ class AnonCredsIssuer:
         if not isinstance(max_cred_num, int):
             raise ValueError("max_cred_num must be an integer")
 
+        # Don't allow revocable cred def to be created without tails server base url
+        if (
+            not self.profile.settings.get("tails_server_base_url")
+            and support_revocation
+        ):
+            raise AnonCredsIssuerError(
+                "tails_server_base_url not configured. Can't create revocable credential definition."  # noqa: E501
+            )
+
         anoncreds_registry = self.profile.inject(AnonCredsRegistry)
         schema_result = await anoncreds_registry.get_schema(self.profile, schema_id)
 
@@ -483,8 +493,8 @@ class AnonCredsIssuer:
     async def match_created_credential_definitions(
         self,
         cred_def_id: Optional[str] = None,
-        issuer_id: Optional[str] = None,
-        schema_issuer_id: Optional[str] = None,
+        issuer_did: Optional[str] = None,
+        schema_issuer_did: Optional[str] = None,
         schema_id: Optional[str] = None,
         schema_name: Optional[str] = None,
         schema_version: Optional[str] = None,
@@ -503,8 +513,8 @@ class AnonCredsIssuer:
                     {
                         key: value
                         for key, value in {
-                            "issuer_id": issuer_id,
-                            "schema_issuer_id": schema_issuer_id,
+                            "issuer_id": issuer_did,
+                            "schema_issuer_id": schema_issuer_did,
                             "schema_id": schema_id,
                             "schema_name": schema_name,
                             "schema_version": schema_version,

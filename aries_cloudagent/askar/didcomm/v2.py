@@ -24,7 +24,6 @@ def ecdh_es_encrypt(to_verkeys: Mapping[str, Key], message: bytes) -> bytes:
     enc_id = "XC20P"
     enc_alg = KeyAlg.XC20P
     wrap_alg = KeyAlg.A256KW
-
     if not to_verkeys:
         raise DidcommEnvelopeError("No message recipients")
 

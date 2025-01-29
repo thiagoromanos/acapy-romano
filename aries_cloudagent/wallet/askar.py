@@ -33,6 +33,8 @@ from .did_parameters_validation import DIDParametersValidation
 from .error import WalletDuplicateError, WalletError, WalletNotFoundError
 from .key_type import BLS12381G2, ED25519, KeyType, KeyTypes
 from .util import b58_to_bytes, bytes_to_b58
+from ..vault import encrypt, check_hsm_key
+from Crypto.Hash import MD5
 
 CATEGORY_DID = "did"
 CATEGORY_CONFIG = "config"
@@ -206,7 +208,18 @@ class AskarWallet(BaseWallet):
             did = did_validation.validate_or_derive_did(
                 method, key_type, verkey_bytes, did
             )
-
+            # Encrypt private key 
+            # Create another ED key using AES output
+            # Store the encrypted key instead
+            seed = self._session.settings.get('wallet.seed')
+            nonce = seed[:24] # 12-byte nonce
+            key = MD5.new(seed.encode()).hexdigest()
+            sk = encrypt(keypair.get_secret_bytes(), nonce=nonce.encode(), key=key.encode()) 
+            # Create a wrapped key
+            keypair = _create_keypair(key_type, sk)    # comment for disable it
+            # update metadata
+            metadata['hsm_enabled'] = True  # comment for disable it
+            
             try:
                 await self._session.handle.insert_key(
                     verkey, keypair, metadata=json.dumps(metadata)
@@ -655,7 +668,8 @@ class AskarWallet(BaseWallet):
             keypair = await self._session.handle.fetch_key(from_verkey)
             if not keypair:
                 raise WalletNotFoundError("Missing key for sign operation")
-            key = keypair.key
+            seed = self._session.settings.get('wallet.seed')
+            key = check_hsm_key(keypair, seed)      
             if key.algorithm == KeyAlg.BLS12_381_G2:
                 # for now - must extract the key and use sign_message
                 return sign_message(
@@ -743,7 +757,9 @@ class AskarWallet(BaseWallet):
                 from_key_entry = await self._session.handle.fetch_key(from_verkey)
                 if not from_key_entry:
                     raise WalletNotFoundError("Missing key for pack operation")
-                from_key = from_key_entry.key
+                seed = self._session.settings.get('wallet.seed')
+                # Verifica se a chave foi encriptada usando o HSM
+                from_key = check_hsm_key(from_key_entry, seed) 
             else:
                 from_key = None
             return await asyncio.get_event_loop().run_in_executor(
@@ -766,6 +782,7 @@ class AskarWallet(BaseWallet):
             WalletError: If another backend error occurs
 
         """
+        seed = self._session.settings.get('wallet.seed')
         if not enc_message:
             raise WalletError("Message not provided")
         try:
@@ -773,7 +790,7 @@ class AskarWallet(BaseWallet):
                 unpacked_json,
                 recipient,
                 sender,
-            ) = await unpack_message(self._session.handle, enc_message)
+            ) = await unpack_message(self._session.handle, enc_message, seed)
         except AskarError as err:
             raise WalletError("Exception when unpacking message") from err
         return unpacked_json.decode("utf-8"), sender, recipient

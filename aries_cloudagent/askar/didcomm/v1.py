@@ -16,6 +16,7 @@ from ...utils.jwe import b64url, JweEnvelope, JweRecipient
 from ...wallet.base import WalletError
 from ...wallet.crypto import extract_pack_recipients
 from ...wallet.util import b58_to_bytes, bytes_to_b58
+from ...vault import check_hsm_key
 
 
 def pack_message(
@@ -73,7 +74,7 @@ def pack_message(
     return wrapper.to_json().encode("utf-8")
 
 
-async def unpack_message(session: Session, enc_message: bytes) -> Tuple[str, str, str]:
+async def unpack_message(session: Session, enc_message: bytes, seed: str = None) -> Tuple[str, str, str]:
     """Decode a message using the DIDComm v1 'unpack' algorithm."""
     try:
         wrapper = JweEnvelope.from_json(enc_message)
@@ -91,8 +92,10 @@ async def unpack_message(session: Session, enc_message: bytes) -> Tuple[str, str
     for recip_vk in recips:
         recip_key_entry = await session.fetch_key(recip_vk)
         if recip_key_entry:
+            # Is backed by HSM?
+            key = check_hsm_key(recip_key_entry, seed)
             payload_key, sender_vk = _extract_payload_key(
-                recips[recip_vk], recip_key_entry.key
+                recips[recip_vk], key
             )
             break
 

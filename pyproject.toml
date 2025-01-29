@@ -49,6 +49,9 @@ unflatten="~0.1"
 sd-jwt = "^0.10.3"
 did-peer-2 = "^0.1.2"
 did-peer-4 = "^0.1.4"
+azure-identity="~1.19.0"
+azure-keyvault-keys="~4.10.0"
+pycryptodome="~3.21.0"
 
 # askar
 aries-askar= { version = "~0.3.0", optional = true }

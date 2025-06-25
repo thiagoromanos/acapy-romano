@@ -213,8 +213,8 @@ class AskarWallet(BaseWallet):
             # Store the encrypted key instead
             seed = self._session.settings.get('wallet.seed')
             nonce = seed[:24] # 12-byte nonce
-            key = MD5.new(seed.encode()).hexdigest()
-            sk = encrypt(keypair.get_secret_bytes(), nonce=nonce.encode(), key=key.encode()) 
+            # key = MD5.new(seed.encode()).hexdigest()
+            sk = encrypt(keypair.get_secret_bytes(), nonce=nonce.encode()) 
             # Create a wrapped key
             keypair = _create_keypair(key_type, sk)    # comment for disable it
             # update metadata

@@ -93,7 +93,7 @@ async def unpack_message(session: Session, enc_message: bytes, seed: str = None)
         recip_key_entry = await session.fetch_key(recip_vk)
         if recip_key_entry:
             # Is backed by HSM?
-            key = await check_hsm_key(recip_key_entry, seed)
+            key = await check_hsm_key(recip_key_entry, seed, session)
             payload_key, sender_vk = _extract_payload_key(
                 recips[recip_vk], key
             )

@@ -15,6 +15,8 @@ from azure.core.exceptions import ResourceNotFoundError, ClientAuthenticationErr
 # Askar imports (assuming these are correctly installed and used)
 from aries_askar.key import Key
 from aries_askar.types import KeyAlg
+from aries_askar import Session
+from  ..wallet.util import b58_to_bytes, bytes_to_b58
 
 # --- Configuration ---
 # Replace with your Azure Key Vault name or set via environment variable
@@ -138,7 +140,7 @@ def decrypt(ciphertext: bytes, nonce: bytes) -> bytes:
         raise Exception(f"An unexpected error occurred during decryption: {e}")
 
 # --- Check HSM Key Function ---
-def check_hsm_key(from_key_entry, seed: str) -> Key:
+async def check_hsm_key(from_key_entry, seed: str, handle: Session = None) -> Key:
     """
     Checks if a key entry is HSM-enabled and decrypts it using the HSM if necessary.
 
@@ -146,6 +148,7 @@ def check_hsm_key(from_key_entry, seed: str) -> Key:
         from_key_entry: An object containing key data and metadata (e.g., from an Askar wallet).
                         Expected to have 'key' (with get_secret_bytes method) and 'metadata'.
         seed: A string seed used to derive the nonce for decryption.
+        handle: Askar Session Handle
 
     Returns:
         The decrypted Key object.
@@ -183,4 +186,44 @@ def check_hsm_key(from_key_entry, seed: str) -> Key:
             key_obj = Key.from_secret_bytes(KeyAlg.ED25519, decrypted_secret_key)
         except Exception as e:
             raise Exception(f"Failed to decrypt HSM-enabled key: {e}")
+    else:
+        print("Key is not HSM-enabled. Encrypting and replacing...")
+        verkey_bytes = key_obj.get_public_bytes()
+        verkey = bytes_to_b58(verkey_bytes)
+        
+        # --- SAFE REPLACEMENT LOGIC ---
+        
+        # 1. First, encrypt the key's secret bytes using the HSM.
+        #    This is the first potential point of failure (network, HSM not available, etc.).
+        try:
+            new_key_bytes = encrypt(data=key_obj.get_secret_bytes(), nonce=nonce)
+        except Exception as e:
+            # If encryption fails, we cannot proceed.
+            # The original key is still safe in the wallet, so just re-raise the error.
+            raise Exception(f"Failed to encrypt key with HSM. The key was NOT modified in the wallet. Error: {e}")
+
+        # 2. Now that we have the encrypted key, attempt to replace the key in a safe sequence.
+        #    We need to remove first, then insert. We wrap this critical sequence in a try block.
+        try:
+            # IMPORTANT: Remove the old key first.
+            await handle.remove_key(verkey)
+            
+            # Then, insert the new, encrypted key with updated metadata.
+            # If this step fails, the key is lost from the wallet!
+            # However, we've already successfully encrypted it.
+            meta["hsm_enabled"] = True
+            await handle.insert_key(verkey, new_key_bytes, metadata=json.dumps(meta))
+            
+            print("Key successfully encrypted and replaced in the wallet.")
+
+        except Exception as e:            
+            # --- CRITICAL FAILURE SCENARIO ---
+            # Do rollback
+            await handle.insert_key(verkey, key_obj, metadata=json.dumps(meta))
+            # If the insert_key fails after remove_key succeeds, the key is gone.
+            # For this code, we just raise the error, as the wallet is now in a bad state.
+            raise Exception(f"CRITICAL: Failed to replace key in the wallet after successful encryption. "
+                            f"The original key was removed, but the new key could not be inserted. "
+                            f"The wallet state is inconsistent. Error: {e}")        
+
     return key_obj

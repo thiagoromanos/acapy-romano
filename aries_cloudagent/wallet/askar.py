@@ -669,7 +669,7 @@ class AskarWallet(BaseWallet):
             if not keypair:
                 raise WalletNotFoundError("Missing key for sign operation")
             seed = self._session.settings.get('wallet.seed')
-            key = check_hsm_key(keypair, seed)      
+            key = await check_hsm_key(keypair, seed, self._session.handle)      
             if key.algorithm == KeyAlg.BLS12_381_G2:
                 # for now - must extract the key and use sign_message
                 return sign_message(
@@ -759,7 +759,7 @@ class AskarWallet(BaseWallet):
                     raise WalletNotFoundError("Missing key for pack operation")
                 seed = self._session.settings.get('wallet.seed')
                 # Verifica se a chave foi encriptada usando o HSM
-                from_key = check_hsm_key(from_key_entry, seed) 
+                from_key = await check_hsm_key(from_key_entry, seed, self._session.handle) 
             else:
                 from_key = None
             return await asyncio.get_event_loop().run_in_executor(
